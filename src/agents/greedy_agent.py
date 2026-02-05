@@ -3,13 +3,7 @@ from __future__ import annotations
 from agents.base import Agent
 from gomoku.board import Board, BOARD_SIZE, Stone, BLACK, WHITE, Move
 from gomoku import rules
-
-def _other(stone: Stone) -> Stone:
-    if stone == BLACK:
-        return WHITE
-    else:
-        return BLACK
-
+from gomoku.game import other
 
 class GreedyAgent(Agent):
     """
@@ -36,7 +30,7 @@ class GreedyAgent(Agent):
                 return m
 
         # 2) Immediate block
-        opp = _other(stone)
+        opp = other(stone)
         for m in moves:
             b2 = board.copy()
             b2.place(m, opp)

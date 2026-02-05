@@ -1,9 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Tuple
-from gomoku.board import Board, Stone
-
-Move = Tuple[int, int]
+from gomoku.board import Board, Stone, Move
 
 class Agent(ABC):
     name: str = "agent"
