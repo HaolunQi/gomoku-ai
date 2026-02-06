@@ -1,1 +1,1 @@
-pytest -q -l --tb=long -r a
+pytest
