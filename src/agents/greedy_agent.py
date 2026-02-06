@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from agents.base import Agent
-from gomoku.board import Board, BOARD_SIZE, Stone, BLACK, WHITE, Move
+from gomoku.board import Board, BOARD_SIZE, Stone, Move
 from gomoku import rules
 from gomoku.game import other
 
