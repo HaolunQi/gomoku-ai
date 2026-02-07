@@ -25,22 +25,7 @@ from gomoku.board import Board, BLACK, WHITE, Stone
 from gomoku.game import Game
 from gomoku import rules
 
-from agents.random_agent import RandomAgent
-from agents.greedy_agent import GreedyAgent
-from agents.human_agent import HumanAgent
-
-
-def build_agent(name: str, seed: Optional[int] = None):
-    """Factory for supported agents."""
-    key = name.strip().lower()
-    if key == "random":
-        return RandomAgent(seed=seed)
-    if key == "greedy":
-        return GreedyAgent()
-    if key == "human":
-        return HumanAgent()
-    raise ValueError(f"Unknown agent: {name!r}. Choose from: random, greedy, human")
-
+from agent_loader import load_agent
 
 def play_match(
     black_name: str,
@@ -51,9 +36,9 @@ def play_match(
 ) -> Stone | None:
     """Run one match; return winner stone ('X'/'O') or None for draw."""
 
-    black_agent = build_agent(black_name, seed=seed)
+    black_agent = load_agent(black_name, seed=seed)
     # Use a different seed stream for white random to avoid identical play.
-    white_agent = build_agent(white_name, seed=None if seed is None else seed + 1)
+    white_agent = load_agent(white_name, seed=None if seed is None else seed + 1)
 
     game = Game(board=Board(), black_agent=black_agent, white_agent=white_agent, to_move=BLACK)
 
@@ -72,7 +57,7 @@ def play_match(
                 )
         else:
             illegal_streak = 0
-
+        
         if print_board:
             print(game.board)
             print()

@@ -9,7 +9,6 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-pytest
 ```
 
 ### Pygame UI (human via mouse; agents optional)
@@ -20,21 +19,76 @@ python src/main.py
 
 > In pygame mode, **mouse clicks** provide human moves. `HumanAgent` (CLI-based) is **not** used in pygame because it calls `input()`.
 
-### CLI / scripts (agent vs agent, or CLI human)
+## Project structure
+
+- `src/gomoku/`: board + rules + game controller
+- `src/agents/`: agent implementations
+- `src/ui/`: pygame UI
+- `tests/`: pytest tests
+- `scripts/`: match runner + benchmark tooling
+
+## CLI Tools
+
+### Run a single match (`scripts/run_match.py`)
+
+Run one Gomoku game in the terminal.
 
 ```bash
 python scripts/run_match.py --black random --white greedy
-python scripts/run_match.py --black human --white greedy
-python scripts/benchmark.py --black greedy --white random --games 200 --seed 0
 ```
 
-## Project structure
+Human vs agent:
 
-- `src/gomoku/`: board + rules + game controller (UI-independent)
-- `src/agents/`: agent implementations (Random / Greedy / Human CLI)
-- `src/ui/`: pygame UI
-- `tests/`: pytest tests (including smoke tests for agents)
-- `scripts/`: match runner + benchmark tooling
+```bash
+python scripts/run_match.py --black human --white greedy --print-board
+```
+
+Options (order does not matter):
+
+* `--black`, `--white`: agent names (e.g. `random`, `greedy`, `human`)
+* `--seed N`: base RNG seed (white uses `seed + 1`)
+* `--print-board`: print board after each move
+
+> Note: Command-line flags (--...) may appear in any order.
+
+---
+
+### Benchmark agents (`scripts/benchmark.py`)
+
+Run many games and aggregate results.
+
+```bash
+python scripts/benchmark.py --agents greedy random --games 200
+```
+
+Recommended (reduces first-move bias):
+
+```bash
+python scripts/benchmark.py --agents greedy random --games 200 --swap-sides --seed 0
+```
+
+Options (order does not matter):
+
+* `--agents A B`: black and white agents
+* `--games N`: number of games
+* `--swap-sides`: alternate colors each game
+* `--seed N`: reproducible randomness
+* `--csv PATH`: write per-game results to CSV
+
+> Note: Command-line flags (--...) may appear in any order.
+
+---
+
+### Agent discovery
+
+Agents are selected by their class attribute `name`:
+
+```python
+class RandomAgent(Agent):
+    name = "random"
+```
+
+Any agent under `agents/` with a unique `name` is automatically usable by the scripts.
 
 ## Project Conventions
 

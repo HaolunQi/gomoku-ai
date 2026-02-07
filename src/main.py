@@ -5,8 +5,13 @@ from ui.pygame_ui import PygameUI
 
 # - Human (UI) vs Agent:
 #     Game(board=Board(), white_agent=RandomAgent())
+#     Game(board=Board(), black_agent=RandomAgent())
+#
+# - Human (UI) vs Human (UI):
+#     Game(board=Board())
 #
 # - Agent vs Human (UI):
+#     Game(board=Board(), white_agent=RandomAgent())
 #     Game(board=Board(), black_agent=RandomAgent())
 #
 # - Agent vs Agent (watch-only):
