@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.14"]
 
     env:
       PYTHONPATH: src
@@ -32,4 +32,4 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest -q
+          python -m pytest -v --maxfail=1
