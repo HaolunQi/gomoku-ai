@@ -2,10 +2,10 @@ from gomoku.board import Board, BLACK, WHITE, EMPTY, BOARD_SIZE
 
 
 def test_board_initial_state():
+    # New board should be empty with correct size and no last_move
     b = Board()
     assert b.size == BOARD_SIZE
     assert b.last_move is None
-    # grid is read-only view (tuple of tuples) and all EMPTY
     assert isinstance(b.grid, tuple)
     assert len(b.grid) == BOARD_SIZE
     assert all(len(row) == BOARD_SIZE for row in b.grid)
@@ -13,17 +13,21 @@ def test_board_initial_state():
 
 
 def test_in_bounds_and_is_empty():
+    # in_bounds should accept valid coordinates and reject invalid ones
     b = Board()
     assert b.in_bounds((0, 0))
     assert b.in_bounds((14, 14))
     assert not b.in_bounds((-1, 0))
     assert not b.in_bounds((0, 15))
+
+    # is_empty should reflect placements
     assert b.is_empty((7, 7))
     b.place((7, 7), BLACK)
     assert not b.is_empty((7, 7))
 
 
 def test_place_updates_grid_and_last_move():
+    # place should update grid and last_move on success
     b = Board()
     assert b.place((1, 2), BLACK) is True
     assert b.grid[1][2] == BLACK
@@ -31,23 +35,26 @@ def test_place_updates_grid_and_last_move():
 
 
 def test_place_rejects_out_of_bounds_and_occupied():
+    # place should reject out-of-bounds moves without updating last_move
     b = Board()
     assert b.place((-1, 0), BLACK) is False
     assert b.last_move is None
     assert b.place((0, 15), BLACK) is False
     assert b.last_move is None
 
+    # place should reject occupied moves and preserve last successful last_move
     assert b.place((3, 3), WHITE) is True
     assert b.place((3, 3), BLACK) is False
-    # last_move should remain the last successful move
     assert b.last_move == (3, 3)
 
 
 def test_legal_moves_count_and_contents():
+    # legal_moves should list all empty cells and exclude occupied ones
     b = Board()
     moves = b.legal_moves()
     assert len(moves) == BOARD_SIZE * BOARD_SIZE
     assert (0, 0) in moves and (14, 14) in moves
+
     b.place((0, 0), BLACK)
     b.place((14, 14), WHITE)
     moves2 = b.legal_moves()
@@ -56,8 +63,10 @@ def test_legal_moves_count_and_contents():
 
 
 def test_copy_is_deep_and_preserves_last_move():
+    # copy should deep-copy the grid and preserve last_move
     b = Board()
     b.place((5, 6), BLACK)
+
     b2 = b.copy()
     assert b2 is not b
     assert b2.grid == b.grid

@@ -3,6 +3,7 @@ from gomoku import rules
 
 
 def test_winner_none_on_empty_board():
+    # Empty board should have no winner, not be terminal, and not be a draw
     b = Board()
     assert rules.winner(b.grid) is None
     assert rules.is_terminal(b.grid) is False
@@ -10,6 +11,7 @@ def test_winner_none_on_empty_board():
 
 
 def test_horizontal_win_black():
+    # Five in a row horizontally should win
     b = Board()
     row = 7
     for col in range(5):
@@ -19,6 +21,7 @@ def test_horizontal_win_black():
 
 
 def test_vertical_win_white():
+    # Five in a row vertically should win
     b = Board()
     col = 3
     for row in range(5):
@@ -27,7 +30,7 @@ def test_vertical_win_white():
 
 
 def test_diagonal_backslash_win_black():
-    # '\\' direction: (0,0),(1,1),(2,2),(3,3),(4,4)
+    # '\\' diagonal should be detected as a win
     b = Board()
     for i in range(5):
         assert b.place((i, i), BLACK)
@@ -35,7 +38,7 @@ def test_diagonal_backslash_win_black():
 
 
 def test_diagonal_slash_win_white():
-    # '/' direction: (0,4),(1,3),(2,2),(3,1),(4,0)
+    # '/' diagonal should be detected as a win
     b = Board()
     for i in range(5):
         assert b.place((i, 4 - i), WHITE)
@@ -43,8 +46,8 @@ def test_diagonal_slash_win_white():
 
 
 def test_no_false_positive_with_gaps():
+    # Non-consecutive stones should not be treated as a win
     b = Board()
-    # XXXX _ X is not 5 consecutive
     row = 10
     for col in range(4):
         assert b.place((row, col), BLACK)
@@ -53,7 +56,7 @@ def test_no_false_positive_with_gaps():
 
 
 def test_draw_on_full_small_grid_without_winner():
-    # Use a 4x4 full grid: WIN_LENGTH=5 so winner must be None.
+    # A full board smaller than WIN_LENGTH should be a draw
     grid = [
         [BLACK, WHITE, BLACK, WHITE],
         [WHITE, BLACK, WHITE, BLACK],
@@ -66,6 +69,7 @@ def test_draw_on_full_small_grid_without_winner():
 
 
 def test_is_terminal_true_when_winner():
+    # Terminal should be True if a winner exists
     b = Board()
     for i in range(5):
         assert b.place((0, i), BLACK)
