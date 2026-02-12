@@ -1,17 +1,17 @@
-from __future__ import annotations
-
 from agents.base import Agent
-from gomoku.board import Board, Stone, Move
+
 
 class HumanAgent(Agent):
-    """CLI human agent: prompts user for a legal move (row col)."""
+    # Human-controlled agent via stdin
 
     name = "human"
 
-    def __init__(self, prompt: str | None = None) -> None:
+    def __init__(self, prompt=None):
+        # Initialize the input prompt
         self._prompt = prompt or "Enter move as: row col (0-indexed): "
 
-    def select_move(self, board: Board, stone: Stone) -> Move:
+    def select_move(self, board, stone):
+        # Prompt until a legal move is entered
         while True:
             try:
                 raw = input(self._prompt).strip()

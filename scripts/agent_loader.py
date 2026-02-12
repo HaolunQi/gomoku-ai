@@ -1,27 +1,20 @@
-# scripts/agent_loader.py
-from __future__ import annotations
-
 import importlib
 import inspect
 import pkgutil
-from typing import Optional, Type, Dict
 
-from agents.base import Agent 
+from agents.base import Agent
 
 
-def _iter_agent_subclasses() -> Dict[str, Type[Agent]]:
-    """
-    Import agents.* modules and collect Agent subclasses with a string `name`.
-    Returns mapping: agent_name -> agent_class
-    """
-    import agents  # package
+def _iter_agent_subclasses():
+    # Import agents.* modules and collect Agent subclasses by name
+    import agents
 
-    mapping: Dict[str, Type[Agent]] = {}
+    mapping = {}
 
     for m in pkgutil.iter_modules(agents.__path__, agents.__name__ + "."):
         mod = importlib.import_module(m.name)
 
-        for _, obj in vars(mod).items():
+        for obj in vars(mod).values():
             if not inspect.isclass(obj):
                 continue
             if obj is Agent:
@@ -34,34 +27,39 @@ def _iter_agent_subclasses() -> Dict[str, Type[Agent]]:
                 key = name.strip().lower()
                 if key in mapping and mapping[key] is not obj:
                     raise ValueError(
-                        f"Duplicate agent name {key!r}: {mapping[key].__module__}.{mapping[key].__name__} "
+                        f"Duplicate agent name {key!r}: "
+                        f"{mapping[key].__module__}.{mapping[key].__name__} "
                         f"and {obj.__module__}.{obj.__name__}"
                     )
                 mapping[key] = obj
 
     return mapping
 
-_AGENT_MAP: Dict[str, Type[Agent]] | None = None
+
+_AGENT_MAP = None
 
 
-def available_agents() -> Dict[str, Type[Agent]]:
+def available_agents():
+    # Return cached mapping of agent_name -> agent_class
     global _AGENT_MAP
     if _AGENT_MAP is None:
         _AGENT_MAP = _iter_agent_subclasses()
     return _AGENT_MAP
 
 
-def _construct(cls: Type[Agent], *, seed: Optional[int] = None) -> Agent:
+def _construct(cls, seed=None):
+    # Construct agent, passing seed if supported
     try:
         sig = inspect.signature(cls)
         if "seed" in sig.parameters:
-            return cls(seed=seed)  # type: ignore[misc]
-        return cls()              # type: ignore[misc]
+            return cls(seed=seed)
+        return cls()
     except (TypeError, ValueError):
-        return cls()              # type: ignore[misc]
+        return cls()
 
 
-def load_agent(name_or_spec: str, *, seed: Optional[int] = None) -> Agent:
+def load_agent(name_or_spec, seed=None):
+    # Load agent by short name or module:Class spec
     s = name_or_spec.strip()
 
     if ":" in s:

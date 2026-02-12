@@ -1,10 +1,12 @@
-from __future__ import annotations
 from abc import ABC, abstractmethod
-from gomoku.board import Board, Stone, Move
+
 
 class Agent(ABC):
-    name: str = "agent"
+    # Base class for all agents
+
+    name = "agent"
 
     @abstractmethod
-    def select_move(self, board: Board, stone: Stone) -> Move:
+    def select_move(self, board, stone):
+        # Return the selected move for the given board and stone
         raise NotImplementedError

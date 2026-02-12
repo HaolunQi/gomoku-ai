@@ -1,23 +1,15 @@
-from __future__ import annotations
-
 from agents.base import Agent
-from gomoku.board import Board, BOARD_SIZE, Stone, Move
 from gomoku import rules
 from gomoku.game import other
 
-class GreedyAgent(Agent):
-    """
-    Baseline agent: one-ply tactical policy.
 
-    Priority:
-      1) Win immediately if possible.
-      2) Block opponent's immediate win if needed.
-      3) Otherwise, prefer center, then any move (deterministic).
-    """
+class GreedyAgent(Agent):
+    # Baseline agent: win if possible, else block, else prefer center
 
     name = "greedy"
 
-    def select_move(self, board: Board, stone: Stone) -> Move:
+    def select_move(self, board, stone):
+        # Choose a move using a simple one-ply policy
         moves = board.legal_moves()
         if not moves:
             raise RuntimeError("No legal moves available (game is over).")
@@ -37,10 +29,10 @@ class GreedyAgent(Agent):
             if rules.winner(b2.grid) == opp:
                 return m
 
-        # 3) Prefer center (closest by Manhattan distance), deterministic tie-break
-        center = (BOARD_SIZE // 2, BOARD_SIZE // 2)
+        # 3) Prefer center (Manhattan distance), deterministic tie-break
+        center = (board.size // 2, board.size // 2)
 
-        def key(m: Move) -> tuple[int, int, int]:
+        def key(m):
             return (abs(m[0] - center[0]) + abs(m[1] - center[1]), m[0], m[1])
 
         return min(moves, key=key)

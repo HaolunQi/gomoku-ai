@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import pygame as pg
 
@@ -9,28 +7,32 @@ from gomoku.board import Board, BLACK, WHITE, EMPTY, BOARD_SIZE
 
 class PygameUI:
     def __init__(self):
+        # Configure window and layout
         self.width = 615
         self.height = 615
         self.grid_origin = 27
         self.cell = 40
         self.asset_dir = os.path.join(os.path.dirname(__file__), "assets")
 
-        # UI state
-        self.hover: tuple[int, int] | None = None
+        # Track hovered cell for preview rendering
+        self.hover = None
 
-        #AI delay state
-        self.ai_delay_ms: int = 300  # <-- change this to control AI delay
-        self._ai_waiting: bool = False
-        self._ai_wait_start_ms: int = 0
+        # Non-blocking AI delay state
+        self.ai_delay_ms = 300
+        self._ai_waiting = False
+        self._ai_wait_start_ms = 0
 
-    def load(self, name: str):
+    def load(self, name):
+        # Load an image asset with alpha
         return pg.image.load(os.path.join(self.asset_dir, name)).convert_alpha()
 
-    def cell_to_pixel(self, move: tuple[int, int]) -> tuple[int, int]:
+    def cell_to_pixel(self, move):
+        # Convert board cell (x, y) to pixel coordinates
         x, y = move
         return (self.grid_origin + x * self.cell, self.grid_origin + y * self.cell)
 
-    def pixel_to_cell(self, pos: tuple[int, int]) -> tuple[int, int] | None:
+    def pixel_to_cell(self, pos):
+        # Convert pixel coordinates to nearest board cell, or None if out of bounds
         px, py = pos
         min_p = self.grid_origin - self.cell / 2
         max_p = self.grid_origin + (BOARD_SIZE - 1) * self.cell + self.cell / 2
@@ -40,15 +42,12 @@ class PygameUI:
         y = int((py - self.grid_origin) / self.cell + 0.5)
         return (x, y)
 
-    def _is_ai_turn(self, game: Game) -> bool:
+    def _is_ai_turn(self, game):
+        # Return True if the current side is controlled by an agent
         return game.agent_for_turn() is not None
 
-    def _maybe_ai_move_with_delay(self, game: Game, now_ms: int, w: str | None) -> None:
-        """
-        Non-blocking AI delay:
-        - If it's AI's turn, wait ai_delay_ms, then call game.maybe_ai_move().
-        - Never blocks the pygame event loop.
-        """
+    def _maybe_ai_move_with_delay(self, game, now_ms, w):
+        # If it's AI's turn, wait ai_delay_ms then apply the AI move (non-blocking)
         if w is not None:
             self._ai_waiting = False
             return
@@ -66,13 +65,8 @@ class PygameUI:
             self._ai_waiting = False
             game.maybe_ai_move()
 
-    def _draw_pieces(
-        self,
-        screen: pg.Surface,
-        game: Game,
-        black_img: pg.Surface,
-        white_img: pg.Surface,
-    ) -> None:
+    def _draw_pieces(self, screen, game, black_img, white_img):
+        # Draw all placed stones
         for row in range(BOARD_SIZE):
             for col in range(BOARD_SIZE):
                 s = game.board.grid[row][col]
@@ -83,17 +77,10 @@ class PygameUI:
                     rect = white_img.get_rect(center=self.cell_to_pixel((row, col)))
                     screen.blit(white_img, rect)
 
-    def _draw_hover_preview(
-        self,
-        screen: pg.Surface,
-        game: Game,
-        black_img: pg.Surface,
-        white_img: pg.Surface,
-        w: str | None,
-    ) -> None:
+    def _draw_hover_preview(self, screen, game, black_img, white_img, w):
+        # Draw a translucent preview stone under the mouse for human turns
         if w or self.hover is None:
             return
-
         if self._is_ai_turn(game):
             return
 
@@ -109,13 +96,8 @@ class PygameUI:
         rect = preview.get_rect(center=self.cell_to_pixel(self.hover))
         screen.blit(preview, rect)
 
-    def _draw_win_overlay(
-        self,
-        screen: pg.Surface,
-        font_big: pg.font.Font,
-        font_small: pg.font.Font,
-        w: str | None,
-    ) -> None:
+    def _draw_win_overlay(self, screen, font_big, font_small, w):
+        # Draw end-of-game overlay and restart hint
         if not w:
             return
 
@@ -131,14 +113,16 @@ class PygameUI:
         text2 = font_small.render(hint, True, (0, 0, 0))
         screen.blit(text2, text2.get_rect(center=(self.width // 2, self.height // 2 + 35)))
 
-    def _restart(self, old: Game) -> Game:
+    def _restart(self, old):
+        # Restart with a fresh board but keep the same agents
         return Game(
             board=Board(),
             black_agent=old.black_agent,
             white_agent=old.white_agent,
         )
 
-    def run(self, game: Game):
+    def run(self, game):
+        # Main pygame loop
         pg.init()
         screen = pg.display.set_mode((self.width, self.height))
         clock = pg.time.Clock()
@@ -181,11 +165,7 @@ class PygameUI:
                         self._ai_waiting = False
                         self._ai_wait_start_ms = 0
 
-                elif (
-                    event.type == pg.MOUSEBUTTONDOWN
-                    and not w
-                    and not self._is_ai_turn(game)
-                ):
+                elif event.type == pg.MOUSEBUTTONDOWN and not w and not self._is_ai_turn(game):
                     if event.button != 1:
                         continue
                     move = self.pixel_to_cell(pg.mouse.get_pos())
