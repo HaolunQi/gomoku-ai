@@ -1,6 +1,7 @@
 from agents.base import Agent
 from gomoku import rules
-from gomoku.game import other
+from gomoku.board import BLACK, WHITE
+
 
 
 class GreedyAgent(Agent):
@@ -22,7 +23,7 @@ class GreedyAgent(Agent):
                 return m
 
         # 2) Immediate block
-        opp = other(stone)
+        opp = WHITE if stone == BLACK else BLACK
         for m in moves:
             b2 = board.copy()
             b2.place(m, opp)

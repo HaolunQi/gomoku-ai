@@ -2,11 +2,6 @@ from gomoku.board import BLACK, WHITE
 from . import rules
 
 
-def other(stone):
-    # Return the opponent's stone
-    return WHITE if stone == BLACK else BLACK
-
-
 class Game:
     def __init__(self, board, black_agent=None, white_agent=None, to_move=BLACK):
         # Initialize game state and agents
@@ -15,10 +10,14 @@ class Game:
         self.white_agent = white_agent
         self.to_move = to_move
 
+    def other(self, stone):
+        # Return the opponent's stone
+        return WHITE if stone == BLACK else BLACK
+
     def step(self, move):
         # Execute one move for the current player
         if self.board.place(move, self.to_move):
-            self.to_move = other(self.to_move)
+            self.to_move = self.other(self.to_move)
             return True
         return False
 

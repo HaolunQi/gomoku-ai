@@ -27,7 +27,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## Running Tests
+### Running Tests
 
 Run the test suite from the project root:
 
