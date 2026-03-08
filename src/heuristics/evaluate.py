@@ -9,12 +9,21 @@ except Exception:
         return {"bias": 1.0}
 
 
-# Default weights kept small and explicit
+# Default weights — hand-tuned baseline (overridden by learned RL weights)
 DEFAULT_WEIGHTS = {
-    "my_stones": 1.0,
-    "opp_stones": -1.0,
-    "empty": 0.0,
     "bias": 0.0,
+    "my_open_four": 100.0,
+    "my_half_four": 50.0,
+    "my_open_three": 20.0,
+    "my_half_three": 5.0,
+    "my_open_two": 2.0,
+    "opp_open_four": -100.0,
+    "opp_half_four": -50.0,
+    "opp_open_three": -20.0,
+    "opp_half_three": -5.0,
+    "opp_open_two": -2.0,
+    "my_stones": 0.1,
+    "center_control": -1.0,
 }
 
 
