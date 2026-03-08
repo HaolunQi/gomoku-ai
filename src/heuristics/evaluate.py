@@ -10,6 +10,7 @@ except ImportError:
         return {"bias": 1.0}
 
 
+<<<<<<< HEAD
 BASE_PATTERN_WEIGHTS = {
     "stones": 1.0,
     "empty": 0.0,
@@ -41,6 +42,23 @@ BASE_PATTERN_WEIGHTS = {
 
     # compatibility
     "four_and_live_three": 500.0,
+=======
+# Default weights — hand-tuned baseline (overridden by learned RL weights)
+DEFAULT_WEIGHTS = {
+    "bias": 0.0,
+    "my_open_four": 100.0,
+    "my_half_four": 50.0,
+    "my_open_three": 20.0,
+    "my_half_three": 5.0,
+    "my_open_two": 2.0,
+    "opp_open_four": -100.0,
+    "opp_half_four": -50.0,
+    "opp_open_three": -20.0,
+    "opp_half_three": -5.0,
+    "opp_open_two": -2.0,
+    "my_stones": 0.1,
+    "center_control": -1.0,
+>>>>>>> d37498d (Add training loop with evaluation)
 }
 
 WIN_SCORE = 1_000_000.0
