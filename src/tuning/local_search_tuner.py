@@ -54,7 +54,7 @@ class LocalSearchTuner:
 
         # Placeholder: do a tiny number of safe perturbations (NOT real algorithm)
         for _ in range(max(0, int(iters))):
-            cand = self.perturb(best, step=0.0)  # step=0 keeps behavior stable
+            cand = self.perturb(best, step=0.1)  # step=0 keeps behavior stable
             cand_score = objective(cand, board_factory, opponents, games=games, time_penalty_weight=time_penalty_weight)
             if cand_score > best_score:
                 best, best_score = cand, cand_score
