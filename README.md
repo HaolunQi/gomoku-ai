@@ -58,13 +58,13 @@ python src/main.py
 Run one Gomoku game in the terminal.
 
 ```bash
-python /scripts/run_match.py --black random --white greedy
+python scripts/run_match.py --black random --white greedy
 ```
 
 Human vs agent:
 
 ```bash
-python /scripts/run_match.py --black human --white greedy --print-board
+python scripts/run_match.py --black human --white greedy --print-board
 ```
 
 Options:
@@ -106,13 +106,13 @@ You can exit a CLI game in the following ways:
 Run many games and aggregate results.
 
 ```bash
-python /scripts/benchmark.py --agents greedy random --games 200
+python scripts/benchmark.py --agents greedy random --games 200
 ```
 
 Recommended (reduces first-move bias):
 
 ```bash
-python /scripts/benchmark.py --agents greedy random --games 200 --swap-sides --seed 0
+python scripts/benchmark.py --agents greedy random --games 200 --swap-sides --seed 0
 ```
 
 Options:
