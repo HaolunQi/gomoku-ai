@@ -2,6 +2,7 @@ from gomoku.board import Board
 from gomoku.game import Game
 from agents.random_agent import RandomAgent
 from agents.ab_agent import AlphaBetaAgent
+from agents.rl_agent import RLAgent
 from ui.pygame_ui import PygameUI
 
 # - Human (UI) vs Agent:
@@ -18,7 +19,7 @@ from ui.pygame_ui import PygameUI
 # - Agent vs Agent (watch-only):
 #     Game(board=Board(), black_agent=RandomAgent(), white_agent=RandomAgent())
 def main():
-    game = Game(board=Board(), black_agent=AlphaBetaAgent(),white_agent=AlphaBetaAgent())
+    game = Game(board=Board(), black_agent=RandomAgent(), white_agent=RandomAgent())
     PygameUI().run(game)
 
 if __name__ == "__main__":
