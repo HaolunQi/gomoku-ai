@@ -13,10 +13,6 @@ except Exception:
 
 # Default weights kept small and explicit
 DEFAULT_WEIGHTS = {
-    "my_stones": 1.0,
-    "opp_stones": -1.0,
-    "empty": 0.0,
-
     "my_live_two": 10.0,
     "my_blocked_two": 5.0,
     "my_live_three": 120.0,
@@ -24,21 +20,21 @@ DEFAULT_WEIGHTS = {
     "my_live_four": 10000.0,
     "my_blocked_four": 1000.0,
 
-    "opp_live_two": -12.0,
-    "opp_blocked_two": -6.0,
-    "opp_live_three": -150.0,
-    "opp_blocked_three": -50.0,
-    "opp_live_four": -12000.0,
-    "opp_blocked_four": -1200.0,
+    "opp_live_two": -20.0,
+    "opp_blocked_two": -10.0,
+    "opp_live_three": -400.0,
+    "opp_blocked_three": -120.0,
+    "opp_live_four": -50000.0,
+    "opp_blocked_four": -15000.0,
 
     "my_double_live_three": 2500.0,
-    "opp_double_live_three": -3000.0,
+    "opp_double_live_three": -20000.0,
 
     "my_double_blocked_four": 9000.0,
-    "opp_double_blocked_four": -10000.0,
+    "opp_double_blocked_four": -40000.0,
 
     "my_four_and_live_three": 8000.0,
-    "opp_four_and_live_three": -9000.0,
+    "opp_four_and_live_three": -30000.0,
 
     "bias": 0.0,
 }
@@ -86,6 +82,8 @@ def order_moves(board, moves, stone, weights=None):
     opp = _other(stone)
     center = (board.size // 2, board.size // 2)
 
+    current_feats = extract_features(board, stone)
+
     winning_moves = []
     blocking_moves = []
     scored_moves = []
@@ -103,28 +101,52 @@ def order_moves(board, moves, stone, weights=None):
             blocking_moves.append(move)
             continue
 
-        # 3) Otherwise use static evaluation after move
+        # 3) Static evaluation after move
         b3 = board.copy()
         ok = b3.place(move, stone)
-        if ok:
-            val = evaluate(b3, stone, weights)
-        else:
-            val = float("-inf")
+        if not ok:
+            continue
 
-        # Prefer higher eval, then closer to center, then deterministic row/col
+        val = evaluate(b3, stone, weights)
+        new_feats = extract_features(b3, stone)
+
+        # 4) Defensive priority:
+        # reward moves that reduce dangerous opponent threats
+        threat_reduction = 0.0
+        threat_reduction += 50000.0 * (
+            current_feats.get("opp_live_four", 0.0) - new_feats.get("opp_live_four", 0.0)
+        )
+        threat_reduction += 20000.0 * (
+            current_feats.get("opp_blocked_four", 0.0) - new_feats.get("opp_blocked_four", 0.0)
+        )
+        threat_reduction += 8000.0 * (
+            current_feats.get("opp_double_blocked_four", 0.0) - new_feats.get("opp_double_blocked_four", 0.0)
+        )
+        threat_reduction += 6000.0 * (
+            current_feats.get("opp_four_and_live_three", 0.0) - new_feats.get("opp_four_and_live_three", 0.0)
+        )
+        threat_reduction += 4000.0 * (
+            current_feats.get("opp_double_live_three", 0.0) - new_feats.get("opp_double_live_three", 0.0)
+        )
+        threat_reduction += 1200.0 * (
+            current_feats.get("opp_live_three", 0.0) - new_feats.get("opp_live_three", 0.0)
+        )
+        threat_reduction += 300.0 * (
+            current_feats.get("opp_blocked_three", 0.0) - new_feats.get("opp_blocked_three", 0.0)
+        )
+
+        # Small center tie-break
         dist = abs(move[0] - center[0]) + abs(move[1] - center[1])
-        scored_moves.append((move, val, dist))
 
-    # Deterministic ordering inside priority groups
+        # Larger is better
+        priority = threat_reduction + val
+        scored_moves.append((move, priority, dist))
+
     winning_moves.sort(key=lambda m: (m[0], m[1]))
     blocking_moves.sort(key=lambda m: (m[0], m[1]))
     scored_moves.sort(key=lambda x: (-x[1], x[2], x[0][0], x[0][1]))
 
-    return (
-        winning_moves
-        + blocking_moves
-        + [move for move, _, _ in scored_moves]
-    )
+    return winning_moves + blocking_moves + [move for move, _, _ in scored_moves]
 
 
 def load_weights_json(path):
