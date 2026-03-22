@@ -49,7 +49,7 @@ def _iter_lines(grid):
             yield line
 
 
-def _count_line_patterns(line, stone, opp):
+def _count_line_patterns(line, stone):
     # Count patterns in a single line:
     # live two / blocked two / live three / blocked three / live four / blocked four
 
@@ -108,7 +108,7 @@ def _count_line_patterns(line, stone, opp):
     }
 
 
-def _collect_patterns(grid, stone, opp):
+def _collect_patterns(grid, stone):
     # Aggregate pattern counts over all lines
     totals = {
         "live_two": 0,
@@ -120,7 +120,7 @@ def _collect_patterns(grid, stone, opp):
     }
 
     for line in _iter_lines(grid):
-        counts = _count_line_patterns(line, stone, opp)
+        counts = _count_line_patterns(line, stone)
         for k in totals:
             totals[k] += counts[k]
 
