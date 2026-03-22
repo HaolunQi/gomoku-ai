@@ -46,6 +46,32 @@ class Board:
             for c in range(self.size)
             if self._grid[r][c] == EMPTY
         ]
+    
+    def candidate_moves(self, radius=2):
+        # Return candidate moves near existing stones
+        stones = []
+
+        for r in range(self.size):
+            for c in range(self.size):
+                if self._grid[r][c] != EMPTY:
+                    stones.append((r, c))
+
+        # Opening: prefer center
+        if not stones:
+            return [(self.size // 2, self.size // 2)]
+
+        cand = set()
+
+        for r, c in stones:
+            for dr in range(-radius, radius + 1):
+                for dc in range(-radius, radius + 1):
+                    nr, nc = r + dr, c + dc
+                    move = (nr, nc)
+
+                    if self.in_bounds(move) and self.is_empty(move):
+                        cand.add(move)
+
+        return list(cand)
 
     def copy(self):
         # Return a deep copy of the board
