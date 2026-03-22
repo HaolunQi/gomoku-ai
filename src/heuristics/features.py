@@ -152,8 +152,8 @@ def extract_features(board, stone):
                 empty_count += 1
 
     # --- pattern features ---
-    my_patterns = _collect_patterns(grid, stone, opp)
-    opp_patterns = _collect_patterns(grid, opp, stone)
+    my_patterns = _collect_patterns(grid, stone)
+    opp_patterns = _collect_patterns(grid, opp)
 
     # --- combined patterns ---
     my_double_live_three = 1.0 if my_patterns["live_three"] >= 2 else 0.0
