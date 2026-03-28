@@ -4,28 +4,21 @@ from agents.base import Agent
 from gomoku.board import BLACK, WHITE
 from gomoku import rules
 
-# TODO: fix import path if needed
 try:
-    from heuristics.evaluate import evaluate
-    from heuristics.evaluate import order_moves
-except Exception:
-    # Keep importable even if package path isn't ready yet
+    from heuristics.evaluate import evaluate, order_moves
+except ImportError:
     def evaluate(board, stone, weights=None):
-        # TODO: replace with real evaluator (shared with RL)
         return 0.0
 
     def order_moves(board, moves, stone, weights=None):
-        # TODO: replace with real move ordering (shared)
         return list(moves)
 
 
 class _SearchCutoff(Exception):
-    # Internal exception used when time/node budget is exceeded
     pass
 
 
 class AlphaBetaAgent(Agent):
-    # AlphaBeta skeleton with plugin hooks (evaluate/order_moves)
     name = "alphabeta"
 
     def __init__(self, max_depth=2, node_budget=5000, time_budget_ms=200, weights=None):
@@ -34,24 +27,23 @@ class AlphaBetaAgent(Agent):
         self.time_budget_ms = time_budget_ms
         self.weights = weights
 
-        # Internal counters for budgets
         self._nodes = 0
         self._t0 = 0.0
+
+        # Simple transposition table:
+        # key -> (searched_depth, value)
+        self._tt = {}
 
     def select_move(self, board, stone):
         moves = board.candidate_moves()
         if not moves:
             raise RuntimeError("No legal moves available (game is over).")
 
-        # Reset budgets
-        self._nodes = 0
-        self._t0 = time.time()
+        self._reset_search_state()
 
-        # Good fallback in case search is cut off immediately
         ordered_moves = order_moves(board, moves, stone, self.weights)
         best_move = ordered_moves[0]
 
-        # Iterative deepening: keep the best fully completed depth result
         for depth in range(1, self.max_depth + 1):
             try:
                 move, _value = self._search_root(board, stone, depth)
@@ -62,23 +54,55 @@ class AlphaBetaAgent(Agent):
 
         return best_move
 
+    def _reset_search_state(self):
+        self._nodes = 0
+        self._t0 = time.perf_counter()
+        self._tt = {}
+
     def _other(self, stone):
         return WHITE if stone == BLACK else BLACK
+
+    def _elapsed_ms(self):
+        return (time.perf_counter() - self._t0) * 1000.0
+
+    def _time_exceeded(self):
+        return self._elapsed_ms() >= float(self.time_budget_ms)
+
+    def _node_exceeded(self):
+        return self._nodes >= int(self.node_budget)
 
     def _check_budget(self):
         if self._time_exceeded() or self._node_exceeded():
             raise _SearchCutoff
 
-    def _time_exceeded(self):
-        # Enforce time budget
-        return (time.time() - self._t0) * 1000.0 >= float(self.time_budget_ms)
+    def _count_node_and_check_budget(self):
+        self._nodes += 1
+        self._check_budget()
 
-    def _node_exceeded(self):
-        # Enforce node budget
-        return self._nodes >= int(self.node_budget)
+    def _board_key(self, board, current_turn, depth):
+        # Replace this later with a stronger board hash if available.
+        # Assumes board.grid is hashable after tuple conversion.
+        grid_key = tuple(tuple(row) for row in board.grid)
+        return (grid_key, current_turn, depth)
+
+    def _lookup_tt(self, board, current_turn, depth):
+        key = self._board_key(board, current_turn, depth)
+        entry = self._tt.get(key)
+        if entry is None:
+            return None
+
+        stored_depth, stored_value = entry
+        if stored_depth >= depth:
+            return stored_value
+        return None
+
+    def _store_tt(self, board, current_turn, depth, value):
+        key = self._board_key(board, current_turn, depth)
+        old = self._tt.get(key)
+        if old is None or old[0] < depth:
+            self._tt[key] = (depth, value)
 
     def _search_root(self, board, stone, depth):
-        # Root search that returns (best_move, best_value)
         self._check_budget()
 
         moves = board.candidate_moves()
@@ -96,8 +120,7 @@ class AlphaBetaAgent(Agent):
             self._check_budget()
 
             child = board.copy()
-            ok = child.place(move, stone)
-            if not ok:
+            if not child.place(move, stone):
                 continue
 
             value = self._search_value(
@@ -113,39 +136,41 @@ class AlphaBetaAgent(Agent):
                 best_value = value
                 best_move = move
 
-            if value > alpha:
-                alpha = value
+            alpha = max(alpha, value)
 
         if best_move is None:
-            # Fallback if something strange happens
             return moves[0], evaluate(board, stone, self.weights)
 
         return best_move, best_value
 
     def _search_value(self, board, root_stone, current_turn, depth, alpha, beta):
-        # Recursive alpha-beta value function
-        self._check_budget()
-        self._nodes += 1
+        self._count_node_and_check_budget()
 
-        # Terminal or cutoff
-        if depth == 0 or rules.is_terminal(board.grid):
-            return evaluate(board, root_stone, self.weights)
+        winner = rules.winner(board.grid)
+        if depth == 0 or winner is not None or rules.is_terminal(board.grid):
+            value = evaluate(board, root_stone, self.weights)
+            self._store_tt(board, current_turn, depth, value)
+            return value
+
+        cached = self._lookup_tt(board, current_turn, depth)
+        if cached is not None:
+            return cached
 
         moves = board.candidate_moves()
         if not moves:
-            return evaluate(board, root_stone, self.weights)
+            value = evaluate(board, root_stone, self.weights)
+            self._store_tt(board, current_turn, depth, value)
+            return value
 
         moves = order_moves(board, moves, current_turn, self.weights)
 
-        # Max node: root player's turn
         if current_turn == root_stone:
             value = float("-inf")
             for move in moves:
                 self._check_budget()
 
                 child = board.copy()
-                ok = child.place(move, current_turn)
-                if not ok:
+                if not child.place(move, current_turn):
                     continue
 
                 child_value = self._search_value(
@@ -157,39 +182,34 @@ class AlphaBetaAgent(Agent):
                     beta=beta,
                 )
 
-                if child_value > value:
-                    value = child_value
-                if value > alpha:
-                    alpha = value
+                value = max(value, child_value)
+                alpha = max(alpha, value)
+
+                if alpha >= beta:
+                    break
+        else:
+            value = float("inf")
+            for move in moves:
+                self._check_budget()
+
+                child = board.copy()
+                if not child.place(move, current_turn):
+                    continue
+
+                child_value = self._search_value(
+                    board=child,
+                    root_stone=root_stone,
+                    current_turn=self._other(current_turn),
+                    depth=depth - 1,
+                    alpha=alpha,
+                    beta=beta,
+                )
+
+                value = min(value, child_value)
+                beta = min(beta, value)
+
                 if alpha >= beta:
                     break
 
-            return value
-
-        # Min node: opponent's turn
-        value = float("inf")
-        for move in moves:
-            self._check_budget()
-
-            child = board.copy()
-            ok = child.place(move, current_turn)
-            if not ok:
-                continue
-
-            child_value = self._search_value(
-                board=child,
-                root_stone=root_stone,
-                current_turn=self._other(current_turn),
-                depth=depth - 1,
-                alpha=alpha,
-                beta=beta,
-            )
-
-            if child_value < value:
-                value = child_value
-            if value < beta:
-                beta = value
-            if alpha >= beta:
-                break
-
+        self._store_tt(board, current_turn, depth, value)
         return value

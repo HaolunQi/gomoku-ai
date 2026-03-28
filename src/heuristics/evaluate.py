@@ -3,15 +3,13 @@ import json
 
 from gomoku import rules
 
-# TODO: fix import path if needed
 try:
     from heuristics.features import extract_features
-except Exception:
+except ImportError:
     def extract_features(board, stone):
         return {"bias": 1.0}
 
 
-# Default weights kept small and explicit
 DEFAULT_WEIGHTS = {
     "my_stones": 1.0,
     "opp_stones": -1.0,
@@ -50,20 +48,56 @@ DEFAULT_WEIGHTS = {
 WIN_SCORE = 1_000_000.0
 LOSS_SCORE = -1_000_000.0
 
+# Move-order-specific weights
+DEFENSE_WEIGHTS = {
+    "opp_live_four": 50000.0,
+    "opp_jump_four": 30000.0,
+    "opp_blocked_four": 20000.0,
+    "opp_double_blocked_four": 8000.0,
+    "opp_four_and_live_three": 6000.0,
+    "opp_double_live_three": 4000.0,
+    "opp_jump_three": 2500.0,
+    "opp_live_three": 1200.0,
+    "opp_blocked_three": 300.0,
+}
+
+STRONG_DEFENSE_KEYS = {
+    "opp_live_four",
+    "opp_jump_four",
+    "opp_blocked_four",
+    "opp_double_blocked_four",
+    "opp_four_and_live_three",
+    "opp_double_live_three",
+}
+
+WEAK_DEFENSE_KEYS = {
+    "opp_jump_three",
+    "opp_live_three",
+    "opp_blocked_three",
+}
+
+ATTACK_WEIGHTS = {
+    "my_live_four": 20000.0,
+    "my_blocked_four": 8000.0,
+    "my_double_live_three": 2500.0,
+    "my_live_three": 1200.0,
+    "my_jump_three": 600.0,
+}
+
+EDGE_BLOCK_THREE_PENALTY = 100000.0
+
 
 def _other(stone):
     return "O" if stone == "X" else "X"
 
 
 def evaluate(board, stone, weights=None):
-    # Linear evaluation: sum_i w_i * f_i
     w = dict(DEFAULT_WEIGHTS)
     if weights:
         w.update(weights)
 
     opp = _other(stone)
 
-    # Rule-based overrides: terminal win/loss should dominate heuristic score
     winner = rules.winner(board.grid)
     if winner == stone:
         return WIN_SCORE
@@ -71,20 +105,65 @@ def evaluate(board, stone, weights=None):
         return LOSS_SCORE
 
     feats = extract_features(board, stone)
-    score = 0.0
-    for k, v in feats.items():
-        score += float(w.get(k, 0.0)) * float(v)
-    return float(score)
+    return float(sum(float(w.get(k, 0.0)) * float(v) for k, v in feats.items()))
+
+
+def _feature_delta(before, after, key):
+    return after.get(key, 0.0) - before.get(key, 0.0)
+
+
+def _weighted_delta_sum(before, after, weights, positive_for_reduction=False, keys=None):
+    total = 0.0
+    active_keys = keys if keys is not None else weights.keys()
+
+    for key in active_keys:
+        if positive_for_reduction:
+            delta = before.get(key, 0.0) - after.get(key, 0.0)
+        else:
+            delta = after.get(key, 0.0) - before.get(key, 0.0)
+        total += weights[key] * delta
+
+    return total
+
+
+def _is_immediate_win(board, move, stone):
+    b = board.copy()
+    if not b.place(move, stone):
+        return False
+    return rules.winner(b.grid) == stone
+
+
+def _is_immediate_block(board, move, opp):
+    b = board.copy()
+    if not b.place(move, opp):
+        return False
+    return rules.winner(b.grid) == opp
+
+
+def _simulate_move(board, move, stone):
+    b = board.copy()
+    if not b.place(move, stone):
+        return None
+    return b
+
+
+def _edge_penalty(move, board_size, strong_defense_gain, weak_defense_gain, my_attack_gain):
+    r, c = move
+    on_edge = (r == 0 or r == board_size - 1 or c == 0 or c == board_size - 1)
+    if not on_edge:
+        return 0.0
+
+    if strong_defense_gain <= 0.0 and my_attack_gain <= 0.0 and weak_defense_gain > 0.0:
+        return -EDGE_BLOCK_THREE_PENALTY
+    return 0.0
 
 
 def order_moves(board, moves, stone, weights=None):
-    # Move ordering hook for AB (and optionally RL)
     if not moves:
         return []
 
     opp = _other(stone)
     center = (board.size // 2, board.size // 2)
-
     current_feats = extract_features(board, stone)
 
     winning_moves = []
@@ -92,89 +171,63 @@ def order_moves(board, moves, stone, weights=None):
     scored_moves = []
 
     for move in moves:
-        r, c = move
-        on_edge = (r == 0 or r == board.size - 1 or c == 0 or c == board.size - 1)
-
-        # 1) Immediate winning move for current player
-        b1 = board.copy()
-        if b1.place(move, stone) and rules.winner(b1.grid) == stone:
+        if _is_immediate_win(board, move, stone):
             winning_moves.append(move)
             continue
 
-        # 2) Immediate blocking move against opponent win
-        b2 = board.copy()
-        if b2.place(move, opp) and rules.winner(b2.grid) == opp:
+        if _is_immediate_block(board, move, opp):
             blocking_moves.append(move)
             continue
 
-        # 3) Static evaluation after move
-        b3 = board.copy()
-        ok = b3.place(move, stone)
-        if not ok:
+        next_board = _simulate_move(board, move, stone)
+        if next_board is None:
             continue
 
-        val = evaluate(b3, stone, weights)
-        new_feats = extract_features(b3, stone)
+        new_feats = extract_features(next_board, stone)
+        static_eval = evaluate(next_board, stone, weights)
 
-        # 4) Threat reductions
-        reduce_opp_live_four = current_feats.get("opp_live_four", 0.0) - new_feats.get("opp_live_four", 0.0)
-        reduce_opp_jump_four = current_feats.get("opp_jump_four", 0.0) - new_feats.get("opp_jump_four", 0.0)
-        reduce_opp_blocked_four = current_feats.get("opp_blocked_four", 0.0) - new_feats.get("opp_blocked_four", 0.0)
-        reduce_opp_double_blocked_four = current_feats.get("opp_double_blocked_four", 0.0) - new_feats.get("opp_double_blocked_four", 0.0)
-        reduce_opp_four_and_live_three = current_feats.get("opp_four_and_live_three", 0.0) - new_feats.get("opp_four_and_live_three", 0.0)
-        reduce_opp_double_live_three = current_feats.get("opp_double_live_three", 0.0) - new_feats.get("opp_double_live_three", 0.0)
-        reduce_opp_jump_three = current_feats.get("opp_jump_three", 0.0) - new_feats.get("opp_jump_three", 0.0)
-        reduce_opp_live_three = current_feats.get("opp_live_three", 0.0) - new_feats.get("opp_live_three", 0.0)
-        reduce_opp_blocked_three = current_feats.get("opp_blocked_three", 0.0) - new_feats.get("opp_blocked_three", 0.0)
+        threat_reduction = _weighted_delta_sum(
+            current_feats,
+            new_feats,
+            DEFENSE_WEIGHTS,
+            positive_for_reduction=True,
+        )
 
-        threat_reduction = 0.0
-        threat_reduction += 50000.0 * reduce_opp_live_four
-        threat_reduction += 30000.0 * reduce_opp_jump_four
-        threat_reduction += 20000.0 * reduce_opp_blocked_four
-        threat_reduction += 8000.0 * reduce_opp_double_blocked_four
-        threat_reduction += 6000.0 * reduce_opp_four_and_live_three
-        threat_reduction += 4000.0 * reduce_opp_double_live_three
-        threat_reduction += 2500.0 * reduce_opp_jump_three
-        threat_reduction += 1200.0 * reduce_opp_live_three
-        threat_reduction += 300.0 * reduce_opp_blocked_three
+        strong_defense_gain = _weighted_delta_sum(
+            current_feats,
+            new_feats,
+            DEFENSE_WEIGHTS,
+            positive_for_reduction=True,
+            keys=STRONG_DEFENSE_KEYS,
+        )
 
-        # 5) My own attack gain
-        my_attack_gain = 0.0
-        my_attack_gain += 20000.0 * (new_feats.get("my_live_four", 0.0) - current_feats.get("my_live_four", 0.0))
-        my_attack_gain += 8000.0 * (new_feats.get("my_blocked_four", 0.0) - current_feats.get("my_blocked_four", 0.0))
-        my_attack_gain += 2500.0 * (new_feats.get("my_double_live_three", 0.0) - current_feats.get("my_double_live_three", 0.0))
-        my_attack_gain += 1200.0 * (new_feats.get("my_live_three", 0.0) - current_feats.get("my_live_three", 0.0))
-        my_attack_gain += 600.0 * (new_feats.get("my_jump_three", 0.0) - current_feats.get("my_jump_three", 0.0))
+        weak_defense_gain = _weighted_delta_sum(
+            current_feats,
+            new_feats,
+            DEFENSE_WEIGHTS,
+            positive_for_reduction=True,
+            keys=WEAK_DEFENSE_KEYS,
+        )
 
-        # 6) On-edge anti-"block three" rule:
-        # If the move is on the edge, do not reward it merely for blocking 3-type threats.
-        strong_defense_gain = 0.0
-        strong_defense_gain += 50000.0 * reduce_opp_live_four
-        strong_defense_gain += 30000.0 * reduce_opp_jump_four
-        strong_defense_gain += 20000.0 * reduce_opp_blocked_four
-        strong_defense_gain += 8000.0 * reduce_opp_double_blocked_four
-        strong_defense_gain += 6000.0 * reduce_opp_four_and_live_three
-        strong_defense_gain += 4000.0 * reduce_opp_double_live_three
+        my_attack_gain = _weighted_delta_sum(
+            current_feats,
+            new_feats,
+            ATTACK_WEIGHTS,
+            positive_for_reduction=False,
+        )
 
-        weak_three_defense_gain = 0.0
-        weak_three_defense_gain += 2500.0 * reduce_opp_jump_three
-        weak_three_defense_gain += 1200.0 * reduce_opp_live_three
-        weak_three_defense_gain += 300.0 * reduce_opp_blocked_three
+        penalty = _edge_penalty(
+            move,
+            board.size,
+            strong_defense_gain,
+            weak_defense_gain,
+            my_attack_gain,
+        )
 
-        edge_penalty = 0.0
-        if on_edge:
-            # Edge move is allowed only if:
-            # - it creates real attack, or
-            # - it handles strong threats (4s / double threats)
-            # Otherwise, if it mainly blocks 3s, suppress it.
-            if strong_defense_gain <= 0.0 and my_attack_gain <= 0.0 and weak_three_defense_gain > 0.0:
-                edge_penalty -= 100000.0
-
-        # Small center tie-break
+        r, c = move
         dist = abs(r - center[0]) + abs(c - center[1])
 
-        # Larger is better
-        priority = threat_reduction + val + edge_penalty
+        priority = static_eval + threat_reduction + penalty
         scored_moves.append((move, priority, dist))
 
     winning_moves.sort(key=lambda m: (m[0], m[1]))
