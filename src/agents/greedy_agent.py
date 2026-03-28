@@ -11,7 +11,7 @@ class GreedyAgent(Agent):
 
     def select_move(self, board, stone):
         # Choose a move using a simple one-ply policy
-        moves = board.legal_moves()
+        moves = board.candidate_moves()
         if not moves:
             raise RuntimeError("No legal moves available (game is over).")
 
