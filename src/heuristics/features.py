@@ -4,13 +4,6 @@
 
 from gomoku.board import BLACK, WHITE, EMPTY
 
-# TODO: decide a canonical feature set with teammate B:
-#   - center_distance
-#   - immediate_win_threats
-#   - open_threes / open_fours counts (later)
-#   - stone_count, mobility, etc.
-# Keep it minimal at first.
-
 
 def _other(stone):
     return WHITE if stone == BLACK else BLACK
@@ -52,6 +45,7 @@ def _iter_lines(grid):
 def _count_line_patterns(line, stone):
     # Count patterns in a single line:
     # live two / blocked two / live three / blocked three / live four / blocked four
+    # plus jump three / jump four
 
     n = len(line)
 
@@ -61,7 +55,10 @@ def _count_line_patterns(line, stone):
     blocked_three = 0
     live_four = 0
     blocked_four = 0
+    jump_three = 0
+    jump_four = 0
 
+    # --- original consecutive-run logic ---
     i = 0
     while i < n:
         if line[i] != stone:
@@ -98,6 +95,37 @@ def _count_line_patterns(line, stone):
 
         i = j
 
+    # --- new: detect jump-three in length-5 windows ---
+    # .XX.X
+    # .X.XX
+    # XX.X.
+    # X.XX.
+    for i in range(n - 4):
+        w = line[i:i + 5]
+
+        if w == [EMPTY, stone, stone, EMPTY, stone]:
+            jump_three += 1
+        elif w == [EMPTY, stone, EMPTY, stone, stone]:
+            jump_three += 1
+        elif w == [stone, stone, EMPTY, stone, EMPTY]:
+            jump_three += 1
+        elif w == [stone, EMPTY, stone, stone, EMPTY]:
+            jump_three += 1
+
+    # --- new: detect jump-four in length-5 windows ---
+    # XXX.X
+    # XX.XX
+    # X.XXX
+    for i in range(n - 4):
+        w = line[i:i + 5]
+
+        if w == [stone, stone, stone, EMPTY, stone]:
+            jump_four += 1
+        elif w == [stone, stone, EMPTY, stone, stone]:
+            jump_four += 1
+        elif w == [stone, EMPTY, stone, stone, stone]:
+            jump_four += 1
+
     return {
         "live_two": live_two,
         "blocked_two": blocked_two,
@@ -105,6 +133,8 @@ def _count_line_patterns(line, stone):
         "blocked_three": blocked_three,
         "live_four": live_four,
         "blocked_four": blocked_four,
+        "jump_three": jump_three,
+        "jump_four": jump_four,
     }
 
 
@@ -117,6 +147,8 @@ def _collect_patterns(grid, stone):
         "blocked_three": 0,
         "live_four": 0,
         "blocked_four": 0,
+        "jump_three": 0,
+        "jump_four": 0,
     }
 
     for line in _iter_lines(grid):
@@ -129,7 +161,6 @@ def _collect_patterns(grid, stone):
 
 def extract_features(board, stone):
     # Return a dict[str, float]-like mapping (plain dict is fine)
-    # TODO: implement real features; for now provide a tiny stable set.
 
     opp = _other(stone)
     grid = board.grid
@@ -156,8 +187,14 @@ def extract_features(board, stone):
     opp_patterns = _collect_patterns(grid, opp)
 
     # --- combined patterns ---
+    # Keep our own attacking combos conservative:
+    # do NOT let jump-three strongly boost our own offense.
+    # But do treat opponent jump-three as a real danger signal.
+
     my_double_live_three = 1.0 if my_patterns["live_three"] >= 2 else 0.0
-    opp_double_live_three = 1.0 if opp_patterns["live_three"] >= 2 else 0.0
+    opp_double_live_three = 1.0 if (
+        opp_patterns["live_three"] + opp_patterns["jump_three"] >= 2
+    ) else 0.0
 
     my_double_blocked_four = 1.0 if my_patterns["blocked_four"] >= 2 else 0.0
     opp_double_blocked_four = 1.0 if opp_patterns["blocked_four"] >= 2 else 0.0
@@ -167,10 +204,10 @@ def extract_features(board, stone):
     ) else 0.0
 
     opp_four_and_live_three = 1.0 if (
-        opp_patterns["blocked_four"] >= 1 and opp_patterns["live_three"] >= 1
+        opp_patterns["blocked_four"] >= 1 and
+        (opp_patterns["live_three"] + opp_patterns["jump_three"] >= 1)
     ) else 0.0
 
-    # A stable feature dictionary
     feats = {
         "my_stones": float(my_count),
         "opp_stones": float(opp_count),
@@ -182,6 +219,8 @@ def extract_features(board, stone):
         "my_blocked_three": float(my_patterns["blocked_three"]),
         "my_live_four": float(my_patterns["live_four"]),
         "my_blocked_four": float(my_patterns["blocked_four"]),
+        "my_jump_three": float(my_patterns["jump_three"]),
+        "my_jump_four": float(my_patterns["jump_four"]),
 
         "opp_live_two": float(opp_patterns["live_two"]),
         "opp_blocked_two": float(opp_patterns["blocked_two"]),
@@ -189,6 +228,8 @@ def extract_features(board, stone):
         "opp_blocked_three": float(opp_patterns["blocked_three"]),
         "opp_live_four": float(opp_patterns["live_four"]),
         "opp_blocked_four": float(opp_patterns["blocked_four"]),
+        "opp_jump_three": float(opp_patterns["jump_three"]),
+        "opp_jump_four": float(opp_patterns["jump_four"]),
 
         "my_double_live_three": my_double_live_three,
         "opp_double_live_three": opp_double_live_three,
@@ -200,20 +241,13 @@ def extract_features(board, stone):
         "opp_four_and_live_three": opp_four_and_live_three,
     }
 
-    # TODO: add center bias feature
-    # TODO: add pattern-based features for gomoku shapes (live two, live three, etc.)
-    # TODO: add "last_move proximity" feature
-
     return feats
 
 
 def featurize_after_move(board, stone, move):
     # Convenience for RL: copy board, apply move, then extract features
-    # TODO: consider optimizing to avoid full copy (later)
-
     b2 = board.copy()
     ok = b2.place(move, stone)
     if not ok:
-        # Keep safe: return base features
         return extract_features(board, stone)
     return extract_features(b2, stone)
