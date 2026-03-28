@@ -13,6 +13,10 @@ except Exception:
 
 # Default weights kept small and explicit
 DEFAULT_WEIGHTS = {
+    "my_stones": 1.0,
+    "opp_stones": -1.0,
+    "empty": 0.0,
+    
     "my_live_two": 10.0,
     "my_blocked_two": 5.0,
     "my_live_three": 120.0,

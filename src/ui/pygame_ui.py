@@ -27,20 +27,23 @@ class PygameUI:
         return pg.image.load(os.path.join(self.asset_dir, name)).convert_alpha()
 
     def cell_to_pixel(self, move):
-        # Convert board cell (x, y) to pixel coordinates
-        x, y = move
-        return (self.grid_origin + x * self.cell, self.grid_origin + y * self.cell)
+        # Convert board cell (r, c) to pixel coordinates
+        r, c = move
+        x = self.grid_origin + c * self.cell
+        y = self.grid_origin + r * self.cell
+        return (x, y)
 
     def pixel_to_cell(self, pos):
-        # Convert pixel coordinates to nearest board cell, or None if out of bounds
+        # Convert pixel coordinates to nearest board cell (r, c), or None if out of bounds
         px, py = pos
         min_p = self.grid_origin - self.cell / 2
         max_p = self.grid_origin + (BOARD_SIZE - 1) * self.cell + self.cell / 2
         if not (min_p <= px <= max_p and min_p <= py <= max_p):
             return None
-        x = int((px - self.grid_origin) / self.cell + 0.5)
-        y = int((py - self.grid_origin) / self.cell + 0.5)
-        return (x, y)
+
+        c = int((px - self.grid_origin) / self.cell + 0.5)
+        r = int((py - self.grid_origin) / self.cell + 0.5)
+        return (r, c)
 
     def _is_ai_turn(self, game):
         # Return True if the current side is controlled by an agent
@@ -84,10 +87,10 @@ class PygameUI:
         if self._is_ai_turn(game):
             return
 
-        x, y = self.hover
-        if not (0 <= x < BOARD_SIZE and 0 <= y < BOARD_SIZE):
+        r, c = self.hover
+        if not (0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE):
             return
-        if game.board.grid[x][y] != EMPTY:
+        if game.board.grid[r][c] != EMPTY:
             return
 
         img = black_img if game.to_move == BLACK else white_img
