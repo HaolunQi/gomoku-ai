@@ -237,6 +237,137 @@ def order_moves(board, moves, stone, weights=None):
     return winning_moves + blocking_moves + [move for move, _, _ in scored_moves]
 
 
+def debug_order_moves(board, moves, stone, weights=None, top_k=None):
+    if not moves:
+        print("No moves.")
+        return []
+
+    opp = _other(stone)
+    center = (board.size // 2, board.size // 2)
+    current_feats = extract_features(board, stone)
+
+    rows = []
+
+    for move in moves:
+        row = {
+            "move": move,
+            "tag": "normal",
+            "static_eval": None,
+            "threat_reduction": None,
+            "strong_defense_gain": None,
+            "weak_defense_gain": None,
+            "my_attack_gain": None,
+            "penalty": None,
+            "priority": None,
+            "dist": None,
+        }
+
+        if _is_immediate_win(board, move, stone):
+            row["tag"] = "immediate_win"
+            row["priority"] = float("inf")
+            rows.append(row)
+            continue
+
+        if _is_immediate_block(board, move, opp):
+            row["tag"] = "immediate_block"
+            row["priority"] = float("inf")
+            rows.append(row)
+            continue
+
+        next_board = _simulate_move(board, move, stone)
+        if next_board is None:
+            row["tag"] = "illegal"
+            row["priority"] = float("-inf")
+            rows.append(row)
+            continue
+
+        new_feats = extract_features(next_board, stone)
+        static_eval = evaluate(next_board, stone, weights)
+
+        threat_reduction = _weighted_delta_sum(
+            current_feats,
+            new_feats,
+            DEFENSE_WEIGHTS,
+            positive_for_reduction=True,
+        )
+
+        strong_defense_gain = _weighted_delta_sum(
+            current_feats,
+            new_feats,
+            DEFENSE_WEIGHTS,
+            positive_for_reduction=True,
+            keys=STRONG_DEFENSE_KEYS,
+        )
+
+        weak_defense_gain = _weighted_delta_sum(
+            current_feats,
+            new_feats,
+            DEFENSE_WEIGHTS,
+            positive_for_reduction=True,
+            keys=WEAK_DEFENSE_KEYS,
+        )
+
+        my_attack_gain = _weighted_delta_sum(
+            current_feats,
+            new_feats,
+            ATTACK_WEIGHTS,
+            positive_for_reduction=False,
+        )
+
+        penalty = _edge_penalty(
+            move,
+            board.size,
+            strong_defense_gain,
+            weak_defense_gain,
+            my_attack_gain,
+        )
+
+        r, c = move
+        dist = abs(r - center[0]) + abs(c - center[1])
+        priority = static_eval + threat_reduction + penalty
+
+        row.update({
+            "static_eval": static_eval,
+            "threat_reduction": threat_reduction,
+            "strong_defense_gain": strong_defense_gain,
+            "weak_defense_gain": weak_defense_gain,
+            "my_attack_gain": my_attack_gain,
+            "penalty": penalty,
+            "priority": priority,
+            "dist": dist,
+        })
+        rows.append(row)
+
+    def sort_key(x):
+        if x["tag"] == "immediate_win":
+            return (0, 0, 0, x["move"][0], x["move"][1])
+        if x["tag"] == "immediate_block":
+            return (1, 0, 0, x["move"][0], x["move"][1])
+        return (2, -x["priority"], x["dist"], x["move"][0], x["move"][1])
+
+    rows.sort(key=sort_key)
+
+    if top_k is not None:
+        rows = rows[:top_k]
+
+    print(f"=== debug_order_moves for stone={stone} ===")
+    for i, row in enumerate(rows, 1):
+        print(
+            f"{i:2d}. move={row['move']} "
+            f"tag={row['tag']} "
+            f"priority={row['priority']} "
+            f"static={row['static_eval']} "
+            f"threat={row['threat_reduction']} "
+            f"strong_def={row['strong_defense_gain']} "
+            f"weak_def={row['weak_defense_gain']} "
+            f"attack={row['my_attack_gain']} "
+            f"penalty={row['penalty']} "
+            f"dist={row['dist']}"
+        )
+
+    return rows
+
+
 def load_weights_json(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)

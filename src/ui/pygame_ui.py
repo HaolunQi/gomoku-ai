@@ -3,6 +3,7 @@ import pygame as pg
 
 from gomoku.game import Game
 from gomoku.board import Board, BLACK, WHITE, EMPTY, BOARD_SIZE
+from heuristics.evaluate import debug_order_moves
 
 
 class PygameUI:
@@ -13,6 +14,9 @@ class PygameUI:
         self.grid_origin = 27
         self.cell = 40
         self.asset_dir = os.path.join(os.path.dirname(__file__), "assets")
+        self.paused = False
+        self.history = []
+        self.force_mode = False
 
         # Track hovered cell for preview rendering
         self.hover = None
@@ -21,6 +25,9 @@ class PygameUI:
         self.ai_delay_ms = 300
         self._ai_waiting = False
         self._ai_wait_start_ms = 0
+
+        # Pause state
+        self.paused = False
 
     def load(self, name):
         # Load an image asset with alpha
@@ -50,6 +57,11 @@ class PygameUI:
         return game.agent_for_turn() is not None
 
     def _maybe_ai_move_with_delay(self, game, now_ms, w):
+        # If paused, never let AI move
+        if self.paused:
+            self._ai_waiting = False
+            return
+
         # If it's AI's turn, wait ai_delay_ms then apply the AI move (non-blocking)
         if w is not None:
             self._ai_waiting = False
@@ -66,6 +78,7 @@ class PygameUI:
 
         if now_ms - self._ai_wait_start_ms >= self.ai_delay_ms:
             self._ai_waiting = False
+            self._push_history(game)
             game.maybe_ai_move()
 
     def _draw_pieces(self, screen, game, black_img, white_img):
@@ -83,6 +96,8 @@ class PygameUI:
     def _draw_hover_preview(self, screen, game, black_img, white_img, w):
         # Draw a translucent preview stone under the mouse for human turns
         if w or self.hover is None:
+            return
+        if self.paused:
             return
         if self._is_ai_turn(game):
             return
@@ -116,6 +131,22 @@ class PygameUI:
         text2 = font_small.render(hint, True, (0, 0, 0))
         screen.blit(text2, text2.get_rect(center=(self.width // 2, self.height // 2 + 35)))
 
+    def _draw_pause_overlay(self, screen, font_big, font_small, w):
+        # Draw pause overlay
+        if not self.paused or w:
+            return
+
+        overlay = pg.Surface((self.width, self.height), pg.SRCALPHA)
+        overlay.fill((0, 0, 0, 100))
+        screen.blit(overlay, (0, 0))
+
+        text = font_big.render("PAUSED", True, (255, 255, 255))
+        screen.blit(text, text.get_rect(center=(self.width // 2, self.height // 2 - 20)))
+
+        hint = "Press Space to resume"
+        text2 = font_small.render(hint, True, (255, 255, 255))
+        screen.blit(text2, text2.get_rect(center=(self.width // 2, self.height // 2 + 35)))
+
     def _restart(self, old):
         # Restart with a fresh board but keep the same agents
         return Game(
@@ -123,9 +154,68 @@ class PygameUI:
             black_agent=old.black_agent,
             white_agent=old.white_agent,
         )
+    
+    def _push_history(self, game):
+        self.history.append({
+        "board": game.board.copy(),
+        "to_move": game.to_move,
+    })
+
+    def _undo(self, game):
+        if not self.history:
+            print("No history to undo.")
+            return game
+
+        state = self.history.pop()
+        game.board = state["board"]
+        game.to_move = state["to_move"]
+
+        self._ai_waiting = False
+        self._ai_wait_start_ms = 0
+        return game
+
+    def _step_ai_once(self, game):
+        if game.winner() is not None:
+            print("Game is over.")
+            return
+
+        if not self._is_ai_turn(game):
+            print("Current turn is not AI.")
+            return
+
+        self._push_history(game)
+        game.maybe_ai_move()
+        print("AI stepped forward once.")
+        print(game.board)
+
+    def _force_place(self, game, move):
+        if move is None:
+            print("Invalid move: None")
+            return
+
+        r, c = move
+        if not (0 <= r < game.board.size and 0 <= c < game.board.size):
+            print("Out of bounds:", move)
+            return
+
+        if game.board.grid[r][c] != EMPTY:
+            print("Cell is not empty:", move)
+            return
+
+        self._push_history(game)
+        game.board.place(move, game.to_move)
+        game.to_move = WHITE if game.to_move == BLACK else BLACK
+
+        self._ai_waiting = False
+        self._ai_wait_start_ms = 0
+
+        print(f"\n[FORCE PLACE] move={move}")
+        print(game.board)
+        moves = game.board.candidate_moves()
+        debug_order_moves(game.board, moves, game.to_move, top_k=10)
 
     def run(self, game):
-        # Main pygame loop
+    # Main pygame loop
         pg.init()
         screen = pg.display.set_mode((self.width, self.height))
         clock = pg.time.Clock()
@@ -152,6 +242,7 @@ class PygameUI:
             # Draw
             self._draw_pieces(screen, game, black_img, white_img)
             self._draw_hover_preview(screen, game, black_img, white_img, w)
+            # self._draw_pause_overlay(screen, font_big, font_small, w)
             self._draw_win_overlay(screen, font_big, font_small, w)
 
             # Events
@@ -167,14 +258,48 @@ class PygameUI:
                         self.hover = None
                         self._ai_waiting = False
                         self._ai_wait_start_ms = 0
+                        self.paused = False
+                    elif event.key == pg.K_SPACE and not w:
+                        self.paused = not self.paused
+                        self._ai_waiting = False
+                        self._ai_wait_start_ms = now_ms
 
-                elif event.type == pg.MOUSEBUTTONDOWN and not w and not self._is_ai_turn(game):
+                        if self.paused:
+                            print("\nPaused. Current board:")
+                            print(game.board)
+                            print("Next to move:", game.to_move)
+                            moves = game.board.candidate_moves()
+                            debug_order_moves(game.board, moves, game.to_move, top_k=10)
+                    elif event.key == pg.K_RIGHT and self.paused and not w:
+                        self._step_ai_once(game)
+                        print("\nForward. Current board:")
+                        debug_order_moves(game.board, moves, game.to_move, top_k=10)
+                    elif event.key == pg.K_LEFT and self.paused:
+                        game = self._undo(game)
+                        print("\nBack. Current board:")
+                        print(game.board)
+                        debug_order_moves(game.board, moves, game.to_move, top_k=10)
+                    elif event.key == pg.K_f and self.paused:
+                        self.force_mode = not self.force_mode
+                        print("Force mode:", self.force_mode)
+
+                elif event.type == pg.MOUSEBUTTONDOWN:
                     if event.button != 1:
                         continue
                     move = self.pixel_to_cell(pg.mouse.get_pos())
-                    if move is not None:
-                        game.step(move)
-                        self._ai_waiting = False
+
+                    if self.paused and self.force_mode:
+                        self._force_place(game, move)
+
+                    elif (
+                        not w
+                        and not self.paused
+                        and not self._is_ai_turn(game)
+                    ):
+                        if move is not None:
+                            self._push_history(game)
+                            game.step(move)
+                            self._ai_waiting = False
 
             clock.tick(60)
             pg.display.update()
