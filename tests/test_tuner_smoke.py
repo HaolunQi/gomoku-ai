@@ -1,9 +1,23 @@
 import os
 import tempfile
 
+from agents.random_agent import RandomAgent
 from gomoku.board import Board
 
 from tuning.local_search_tuner import LocalSearchTuner
+from tuning.objective import objective
+
+
+def test_objective_returns_float_with_real_opponent():
+    # run a couple of real games on a tiny board and check the score is a valid float
+    score = objective(
+        weights={"my_stones": 1.0, "opp_stones": -1.0, "empty": 0.0},
+        board_factory=lambda: Board(size=6),
+        opponents=[RandomAgent(seed=0)],
+        games=2,
+    )
+    assert isinstance(score, float)
+    assert score <= 1.0
 
 
 def test_tuner_writes_and_reads_weights_file():
