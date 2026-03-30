@@ -6,7 +6,8 @@ from gomoku.game import Game
 
 
 def objective(weights, board_factory, opponents, games=4, time_penalty_weight=0.001):
-    """Score a weight vector by win-rate of AB agent vs opponents, minus a time penalty."""
+    """Play the AB agent (with candidate weights) against opponents and return
+    win_rate minus a small time penalty. Higher is better."""
     if not opponents:
         return 0.0
 
@@ -21,7 +22,7 @@ def objective(weights, board_factory, opponents, games=4, time_penalty_weight=0.
             board = board_factory()
             t0 = time.time()
 
-            # Alternate colors each game to reduce first-move bias
+            # swap colors each game so first-move advantage doesn't skew results
             if i % 2 == 0:
                 game = Game(board=board, black_agent=ab_agent, white_agent=opp)
                 ab_stone = BLACK
@@ -29,6 +30,7 @@ def objective(weights, board_factory, opponents, games=4, time_penalty_weight=0.
                 game = Game(board=board, black_agent=opp, white_agent=ab_agent)
                 ab_stone = WHITE
 
+            # play the game out; move_cap is a safety net against infinite loops
             move_cap = board.size * board.size
             moves_played = 0
             while not game.is_over() and moves_played < move_cap:
