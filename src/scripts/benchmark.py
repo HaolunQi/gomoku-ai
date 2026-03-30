@@ -2,15 +2,6 @@ import argparse
 import csv
 import sys
 from pathlib import Path
-
-# Ensure src/ is importable
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_DIR = REPO_ROOT / "src"
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
 from gomoku.board import BLACK, WHITE
 from scripts.run_match import play_match
 

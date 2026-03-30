@@ -23,8 +23,10 @@ Create a virtual environment and install dependencies:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
+pip install -e .
 ```
 
 ### Running Tests
@@ -58,13 +60,13 @@ python src/main.py
 Run one Gomoku game in the terminal.
 
 ```bash
-python scripts/run_match.py --black random --white greedy
+python -m scripts.run_match --black random --white greedy
 ```
 
 Human vs agent:
 
 ```bash
-python scripts/run_match.py --black human --white greedy --print-board
+python -m scripts.run_match --black human --white greedy --print-board
 ```
 
 Options:
@@ -106,13 +108,13 @@ You can exit a CLI game in the following ways:
 Run many games and aggregate results.
 
 ```bash
-python scripts/benchmark.py --agents greedy random --games 200
+python -m scripts.benchmark --agents greedy random --games 200
 ```
 
 Recommended (reduces first-move bias):
 
 ```bash
-python scripts/benchmark.py --agents greedy random --games 200 --swap-sides --seed 0
+python -m scripts.benchmark --agents greedy random --games 200 --swap-sides --seed 0
 ```
 
 Options:
