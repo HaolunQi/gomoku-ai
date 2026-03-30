@@ -25,9 +25,6 @@ class PygameUI:
         self._ai_waiting = False
         self._ai_wait_start_ms = 0
 
-        # Pause state
-        self.paused = False
-
     def load(self, name):
         # Load an image asset with alpha
         return pg.image.load(os.path.join(self.asset_dir, name)).convert_alpha()
@@ -248,7 +245,7 @@ class PygameUI:
             # Draw
             self._draw_pieces(screen, game, black_img, white_img)
             self._draw_hover_preview(screen, game, black_img, white_img, w)
-            # self._draw_pause_overlay(screen, font_big, font_small, w)
+            self._draw_pause_overlay(screen, font_big, font_small, w)
             self._draw_win_overlay(screen, font_big, font_small, w)
 
             # Events
@@ -266,7 +263,12 @@ class PygameUI:
                         self._ai_waiting = False
                         self._ai_wait_start_ms = 0
                         self.paused = False
+<<<<<<< HEAD
 
+=======
+                        self.history.clear()
+                        self.force_mode = False
+>>>>>>> dd7a3ee (Fix pygame debug UI: moves scope, run() indent, pause overlay, restart state)
                     elif event.key == pg.K_SPACE and not w:
                         self.paused = not self.paused
                         self._ai_waiting = False
@@ -283,9 +285,13 @@ class PygameUI:
                     elif event.key == pg.K_RIGHT and self.paused and not w:
                         self._step_ai_once(game)
                         print("\nForward. Current board:")
+<<<<<<< HEAD
                         print(game.board)
                         moves = game.board.candidate_moves()
                         debug_evaluate(game.board, game.to_move)
+=======
+                        moves = game.board.candidate_moves()
+>>>>>>> dd7a3ee (Fix pygame debug UI: moves scope, run() indent, pause overlay, restart state)
                         debug_order_moves(game.board, moves, game.to_move, top_k=10)
 
                     elif event.key == pg.K_LEFT and self.paused:
@@ -293,7 +299,10 @@ class PygameUI:
                         print("\nBack. Current board:")
                         print(game.board)
                         moves = game.board.candidate_moves()
+<<<<<<< HEAD
                         debug_evaluate(game.board, game.to_move)
+=======
+>>>>>>> dd7a3ee (Fix pygame debug UI: moves scope, run() indent, pause overlay, restart state)
                         debug_order_moves(game.board, moves, game.to_move, top_k=10)
 
                     elif event.key == pg.K_f and self.paused:
