@@ -1,6 +1,4 @@
-
 import time
-import random
 
 from agents.base import Agent
 from gomoku.board import BLACK, WHITE
@@ -23,7 +21,7 @@ class _SearchCutoff(Exception):
 class AlphaBetaAgent(Agent):
     name = "alphabeta"
 
-    def __init__(self, max_depth=2, node_budget=5000, time_budget_ms=200, weights=None, seed=None):
+    def __init__(self, max_depth=2, node_budget=5000, time_budget_ms=200, weights=None):
         self.max_depth = max_depth
         self.node_budget = node_budget
         self.time_budget_ms = time_budget_ms
@@ -31,9 +29,10 @@ class AlphaBetaAgent(Agent):
 
         self._nodes = 0
         self._t0 = 0.0
-        self._tt = {}
 
-        self._rng = random.Random(seed)
+        # Simple transposition table:
+        # key -> (searched_depth, value)
+        self._tt = {}
 
     def select_move(self, board, stone):
         moves = board.candidate_moves()
@@ -81,6 +80,8 @@ class AlphaBetaAgent(Agent):
         self._check_budget()
 
     def _board_key(self, board, current_turn, depth):
+        # Replace this later with a stronger board hash if available.
+        # Assumes board.grid is hashable after tuple conversion.
         grid_key = tuple(tuple(row) for row in board.grid)
         return (grid_key, current_turn, depth)
 
@@ -112,7 +113,6 @@ class AlphaBetaAgent(Agent):
 
         best_move = None
         best_value = float("-inf")
-        best_score = float("-inf")
         alpha = float("-inf")
         beta = float("inf")
 
@@ -132,10 +132,7 @@ class AlphaBetaAgent(Agent):
                 beta=beta,
             )
 
-            score = value + self._rng.uniform(-1e-3, 1e-3)
-
-            if score > best_score:
-                best_score = score
+            if value > best_value:
                 best_value = value
                 best_move = move
 
