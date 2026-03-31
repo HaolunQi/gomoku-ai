@@ -43,11 +43,11 @@ BASE_PATTERN_WEIGHTS = {
     "four_and_live_three": 500.0,
 }
 
-WIN_SCORE = 1_000_000.0
-LOSS_SCORE = -1_000_000.0
+WIN_SCORE = 1_000.0
+LOSS_SCORE = -1_000.0
 
 
-EDGE_BLOCK_THREE_PENALTY = 100000.0
+EDGE_BLOCK_THREE_PENALTY = 100.0
 
 
 def _other(stone):
@@ -141,6 +141,26 @@ def _edge_penalty(move, board_size, strong_defense_gain, weak_defense_gain, my_a
     return 0.0
 
 
+def _opp_next_creates_combo(board, stone, candidate_moves):
+    opp = _other(stone)
+    before = extract_features(board, opp)
+
+    for m in candidate_moves:
+        b = board.copy()
+        if not b.place(m, opp):
+            continue
+
+        after = extract_features(b, opp)
+
+        if ( (before.get("my_double_live_three", 0.0) == 0.0 and after.get("my_double_live_three", 0.0) > 0.0)
+            or (before.get("my_jump3_and_live3", 0.0) == 0.0 and after.get("my_jump3_and_live3", 0.0) > 0.0)
+            or (before.get("my_double_jump_three", 0.0) == 0.0 and after.get("my_double_jump_three", 0.0) > 0.0)
+            or (before.get("my_double_live_three", 0.0) == 0.0 and after.get("my_double_live_three", 0.0) > 0.0)
+            or (before.get("my_blocked4_and_live3", 0.0) == 0.0 and after.get("my_blocked4_and_live3", 0.0) > 0.0)
+        ):
+            return True
+    return False
+
 def order_moves(board, moves, stone, weights=None):
     if not moves:
         return []
@@ -159,10 +179,10 @@ def order_moves(board, moves, stone, weights=None):
     forced_defense_moves = []
     scored_moves = []
 
+    # --- trigger ---
     opp_three_pressure = (
         before_feats.get("opp_live_three", 0.0)
         + before_feats.get("opp_jump_three", 0.0)
-        + before_feats.get("opp_blocked_three", 0.0)
     )
 
     my_attack_ready = (
@@ -174,6 +194,9 @@ def order_moves(board, moves, stone, weights=None):
 
     must_defend_three = (opp_three_pressure > 0.0 and not my_attack_ready)
 
+    # =========================
+    # 1. first pass: collect scores
+    # =========================
     for move in moves:
         if _is_immediate_win(board, move, stone):
             winning_moves.append(move)
@@ -188,14 +211,44 @@ def order_moves(board, moves, stone, weights=None):
             continue
 
         after_eval = evaluate(next_board, stone, weights=w)
-        after_feats = extract_features(next_board, stone)
         delta = after_eval - before_eval
 
         r, c = move
         dist = abs(r - center[0]) + abs(c - center[1])
 
-        # --- forced defense branch ---
-        if must_defend_three:
+        scored_moves.append((move, delta, dist, next_board))
+
+    # =========================
+    # 2. coarse sort
+    # =========================
+    scored_moves.sort(key=lambda x: (-x[1], x[2], x[0][0], x[0][1]))
+
+    # =========================
+    # 3. top-K opponent threat scan
+    # =========================
+    TOP_K = 10
+
+    for i in range(min(TOP_K, len(scored_moves))):
+        move, delta, dist, next_board = scored_moves[i]
+        opp_moves = next_board.candidate_moves(radius=2)
+
+        if _opp_next_creates_combo(next_board, stone, opp_moves):
+            delta -= 50000.0
+
+        scored_moves[i] = (move, delta, dist, next_board)
+
+    # =========================
+    # 4. re-sort after penalty
+    # =========================
+    scored_moves.sort(key=lambda x: (-x[1], x[2], x[0][0], x[0][1]))
+
+    # =========================
+    # 5. must_defend_three handling
+    # =========================
+    if must_defend_three:
+        for move, delta, dist, next_board in scored_moves:
+            after_feats = extract_features(next_board, stone)
+
             live3_red = (
                 before_feats.get("opp_live_three", 0.0)
                 - after_feats.get("opp_live_three", 0.0)
@@ -204,89 +257,30 @@ def order_moves(board, moves, stone, weights=None):
                 before_feats.get("opp_jump_three", 0.0)
                 - after_feats.get("opp_jump_three", 0.0)
             )
+
             three_reduction = live3_red + jump3_red
 
             if three_reduction > 0.0:
                 forced_defense_moves.append(
                     (move, three_reduction, live3_red, jump3_red, delta, dist)
                 )
-                continue
 
-        # --- offensive shape deltas ---
-        new_live_four = after_feats.get("my_live_four", 0.0) - before_feats.get("my_live_four", 0.0)
-        new_jump_four = after_feats.get("my_jump_four", 0.0) - before_feats.get("my_jump_four", 0.0)
-        new_blocked_four = after_feats.get("my_blocked_four", 0.0) - before_feats.get("my_blocked_four", 0.0)
-
-        new_live_three = after_feats.get("my_live_three", 0.0) - before_feats.get("my_live_three", 0.0)
-        new_jump_three = after_feats.get("my_jump_three", 0.0) - before_feats.get("my_jump_three", 0.0)
-        new_blocked_three = after_feats.get("my_blocked_three", 0.0) - before_feats.get("my_blocked_three", 0.0)
-
-        new_double_live_three = after_feats.get("my_double_live_three", 0.0) - before_feats.get("my_double_live_three", 0.0)
-        new_jump3_and_live3 = after_feats.get("my_jump3_and_live3", 0.0) - before_feats.get("my_jump3_and_live3", 0.0)
-        new_double_jump_three = after_feats.get("my_double_jump_three", 0.0) - before_feats.get("my_double_jump_three", 0.0)
-
-        # key idea:
-        # prefer "clean live three" over jump-three-based growth
-        attack_key = (
-            new_live_four > 0.0,
-            new_jump_four > 0.0,
-            new_blocked_four > 0.0,
-            new_live_three > 0.0,          # live three first
-            new_double_live_three > 0.0,
-            new_jump3_and_live3 > 0.0,
-            new_jump_three > 0.0,          # jump three later
-            new_double_jump_three > 0.0,
-            new_blocked_three > 0.0,
+        forced_defense_moves.sort(
+            key=lambda x: (-x[1], -x[2], -x[3], -x[4], x[5], x[0][0], x[0][1])
         )
 
-        scored_moves.append(
-            (
-                move,
-                attack_key,
-                delta,
-                dist,
-                new_live_three,
-                new_jump_three,
-                new_live_four,
-                new_jump_four,
+        if forced_defense_moves:
+            return (
+                winning_moves
+                + blocking_moves
+                + [move for move, *_ in forced_defense_moves]
+                + [move for move, *_ in scored_moves]
             )
-        )
 
-    winning_moves.sort(key=lambda m: (m[0], m[1]))
-    blocking_moves.sort(key=lambda m: (m[0], m[1]))
-
-    forced_defense_moves.sort(
-        key=lambda x: (-x[1], -x[2], -x[3], -x[4], x[5], x[0][0], x[0][1])
-    )
-
-    # lexicographic attack priority first, eval second
-    scored_moves.sort(
-        key=lambda x: (
-            -int(x[1][0]),   # new live four
-            -int(x[1][1]),   # new jump four
-            -int(x[1][2]),   # new blocked four
-            -int(x[1][3]),   # new live three   <-- more important
-            -int(x[1][4]),   # new double live three
-            -int(x[1][5]),   # new jump3+live3
-            -int(x[1][6]),   # new jump three
-            -int(x[1][7]),   # new double jump three
-            -int(x[1][8]),   # new blocked three
-            -x[2],           # delta
-            x[3],            # dist
-            x[0][0],
-            x[0][1],
-        )
-    )
-
-    if forced_defense_moves:
-        return (
-            winning_moves
-            + blocking_moves
-            + [move for move, *_ in forced_defense_moves]
-            + [x[0] for x in scored_moves]
-        )
-
-    return winning_moves + blocking_moves + [x[0] for x in scored_moves]
+    # =========================
+    # 6. normal return
+    # =========================
+    return winning_moves + blocking_moves + [move for move, *_ in scored_moves]
 
 def debug_evaluate(board, stone, weights=None):
     w = dict(DEFAULT_WEIGHTS)
