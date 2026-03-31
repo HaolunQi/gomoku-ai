@@ -1,6 +1,7 @@
 from gomoku.board import Board
 from gomoku.game import Game
 from agents.random_agent import RandomAgent
+from agents.greedy_agent import GreedyAgent
 from agents.ab_agent import AlphaBetaAgent
 from agents.rl_agent import RLAgent
 from ui.pygame_ui import PygameUI

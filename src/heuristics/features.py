@@ -223,6 +223,9 @@ def extract_features(board, stone):
     my_blocked4_and_live3 = 1.0 if my_patterns["blocked_four"] >= 1 and my_patterns["live_three"] >= 1 else 0.0
     opp_blocked4_and_live3 = 1.0 if opp_patterns["blocked_four"] >= 1 and opp_patterns["live_three"] >= 1 else 0.0
 
+    my_blocked4_and_jump3 = 1.0 if my_patterns["blocked_four"] >= 1 and my_patterns["jump_three"] >= 1 else 0.0
+    oop_blocked4_and_jump3 = 1.0 if opp_patterns["blocked_four"] >= 1 and opp_patterns["jump_three"] >= 1 else 0.0
+
     feats = {
         "my_stones": float(my_count),
         "opp_stones": float(opp_count),
@@ -256,6 +259,7 @@ def extract_features(board, stone):
         "my_double_blocked_four": my_double_blocked_four,
         "my_blocked4_and_jump4": my_blocked4_and_jump4,
         "my_blocked4_and_live3": my_blocked4_and_live3,
+        "my_blocked4_and_jump3": my_blocked4_and_jump3,
 
         "opp_double_live_three": opp_double_live_three,
         "opp_double_jump_three": opp_double_jump_three,
@@ -263,6 +267,7 @@ def extract_features(board, stone):
         "opp_double_blocked_four": opp_double_blocked_four,
         "opp_blocked4_and_jump4": opp_blocked4_and_jump4,
         "opp_blocked4_and_live3": opp_blocked4_and_live3,
+        "oop_blocked4_and_jump3": oop_blocked4_and_jump3,
     }
 
     return feats
