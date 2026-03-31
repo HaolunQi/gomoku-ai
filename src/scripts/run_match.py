@@ -4,7 +4,6 @@ from pathlib import Path
 from gomoku.board import Board, BLACK, WHITE
 from gomoku.game import Game
 from gomoku import rules
-
 from scripts.agent_loader import load_agent
 
 

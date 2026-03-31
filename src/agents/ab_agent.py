@@ -3,15 +3,8 @@ import time
 from agents.base import Agent
 from gomoku.board import BLACK, WHITE
 from gomoku import rules
+from heuristics.evaluate import evaluate, order_moves, _is_immediate_win, _is_immediate_block
 
-try:
-    from heuristics.evaluate import evaluate, order_moves
-except ImportError:
-    def evaluate(board, stone, weights=None):
-        return 0.0
-
-    def order_moves(board, moves, stone, weights=None):
-        return list(moves)
 
 
 class _SearchCutoff(Exception):
@@ -110,6 +103,15 @@ class AlphaBetaAgent(Agent):
             return None, evaluate(board, stone, self.weights)
 
         moves = order_moves(board, moves, stone, self.weights)
+
+        for move in moves:
+            if _is_immediate_win(board, move, stone):
+                return move, float("inf")
+
+        opp = self._other(stone)
+        for move in moves:
+            if _is_immediate_block(board, move, opp):
+                return move, float("inf")
 
         best_move = None
         best_value = float("-inf")
