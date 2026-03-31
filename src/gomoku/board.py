@@ -71,7 +71,7 @@ class Board:
                     if self.in_bounds(move) and self.is_empty(move):
                         cand.add(move)
 
-        return list(cand)
+        return sorted(cand)
 
     def copy(self):
         # Return a deep copy of the board
