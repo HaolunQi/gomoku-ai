@@ -109,17 +109,6 @@ def _simulate_move(board, move, stone):
     return b
 
 
-def _edge_penalty(move, board_size, strong_defense_gain, weak_defense_gain, my_attack_gain):
-    r, c = move
-    on_edge = (r == 0 or r == board_size - 1 or c == 0 or c == board_size - 1)
-    if not on_edge:
-        return 0.0
-
-    if strong_defense_gain <= 0.0 and my_attack_gain <= 0.0 and weak_defense_gain > 0.0:
-        return -EDGE_BLOCK_THREE_PENALTY
-    return 0.0
-
-
 def _opp_next_creates_combo(board, stone, candidate_moves):
     opp = _other(stone)
     before = extract_features(board, opp)
@@ -131,11 +120,9 @@ def _opp_next_creates_combo(board, stone, candidate_moves):
 
         after = extract_features(b, opp)
 
-        if ( (before.get("my_double_live_three", 0.0) == 0.0 and after.get("my_double_live_three", 0.0) > 0.0)
-            or (before.get("my_jump3_and_live3", 0.0) == 0.0 and after.get("my_jump3_and_live3", 0.0) > 0.0)
-            or (before.get("my_blocked4_and_live3", 0.0) == 0.0 and after.get("my_blocked4_and_live3", 0.0) > 0.0)
+        if ((before.get("my_blocked4_and_live3", 0.0) == 0.0 and after.get("my_blocked4_and_live3", 0.0) > 0.0)
             or (before.get("my_blocked4_and_jump4", 0.0) == 0.0 and after.get("my_blocked4_and_jump4", 0.0) > 0.0)
-            
+            or (before.get("my_blocked4_and_jump3", 0.0) == 0.0 and after.get("my_blocked4_and_jump3", 0.0) > 0.0)    
         ):
             return True
     return False
@@ -250,7 +237,7 @@ def order_moves(board, moves, stone, weights=None):
 
         # already forcing enough: skip opponent-combo check
         is_strong_forcing = (
-            attack_key[0]   # live_four
+            attack_key[0]     # live_four
             or attack_key[1]  # blocked4_and_jump4
             or attack_key[2]  # blocked4_and_live3
         )
@@ -371,6 +358,21 @@ def debug_order_moves(board, moves, stone, weights=None, top_k=10):
     before_eval = evaluate(board, stone, weights=w)
     before_feats = extract_features(board, stone)
 
+    opp_three_pressure = (
+        before_feats.get("opp_live_three", 0.0)
+        + before_feats.get("opp_jump_three", 0.0)
+    )
+
+    my_attack_ready = (
+        before_feats.get("my_live_three", 0.0) > 0.0
+        or before_feats.get("my_jump_three", 0.0) > 0.0
+        or before_feats.get("my_live_four", 0.0) > 0.0
+        or before_feats.get("my_blocked_four", 0.0) > 0.0
+        or before_feats.get("my_jump_four", 0.0) > 0.0
+    )
+
+    must_defend_three = (opp_three_pressure > 0.0 and not my_attack_ready)
+
     def build_attack_key(before, after):
         return (
             after["my_live_four"] > before["my_live_four"],
@@ -393,16 +395,16 @@ def debug_order_moves(board, moves, stone, weights=None, top_k=10):
         dist = abs(r - center[0]) + abs(c - center[1])
 
         if _is_immediate_win(board, move, stone):
-            rows.append((move, "win", None, None, dist, None))
+            rows.append((move, "win", None, None, dist, None, 0.0, 0.0, 0.0))
             continue
 
         if _is_immediate_block(board, move, opp):
-            rows.append((move, "block", None, None, dist, None))
+            rows.append((move, "block", None, None, dist, None, 0.0, 0.0, 0.0))
             continue
 
         next_board = _simulate_move(board, move, stone)
         if next_board is None:
-            rows.append((move, "illegal", None, None, dist, None))
+            rows.append((move, "illegal", None, None, dist, None, 0.0, 0.0, 0.0))
             continue
 
         after_eval = evaluate(next_board, stone, weights=w)
@@ -418,7 +420,6 @@ def debug_order_moves(board, moves, stone, weights=None, top_k=10):
         )
 
         if is_strong_forcing:
-            opp_next_combo = False
             opp_combo_penalty = 0.0
         else:
             opp_moves = next_board.candidate_moves(radius=2)
@@ -426,23 +427,29 @@ def debug_order_moves(board, moves, stone, weights=None, top_k=10):
             opp_combo_penalty = 50000.0 if opp_next_combo else 0.0
 
         final_delta = delta - opp_combo_penalty
-        rows.append((move, "normal", ak, final_delta, dist, delta))
 
-    def key(x):
-        move, tag, ak, final_delta, dist, raw_delta = x
+        live3_red = (
+            before_feats.get("opp_live_three", 0.0)
+            - after_feats.get("opp_live_three", 0.0)
+        )
+        jump3_red = (
+            before_feats.get("opp_jump_three", 0.0)
+            - after_feats.get("opp_jump_three", 0.0)
+        )
+        three_reduction = live3_red + jump3_red
 
-        if tag == "win":
-            return (-1,)
-        if tag == "block":
-            return (0,)
-        if tag == "illegal":
-            return (999,)
+        rows.append((
+            move, "normal", ak, final_delta, dist, delta,
+            three_reduction, live3_red, jump3_red
+        ))
+
+    def normal_key(row):
+        move, tag, ak, final_delta, dist, raw_delta, three_reduction, live3_red, jump3_red = row
 
         if ak is None:
             ak = (False,) * 11
 
         return (
-            1,
             *[-int(v) for v in ak],
             -(final_delta if final_delta is not None else -1e18),
             dist,
@@ -450,28 +457,61 @@ def debug_order_moves(board, moves, stone, weights=None, top_k=10):
             move[1],
         )
 
-    rows.sort(key=key)
+    win_rows = [r for r in rows if r[1] == "win"]
+    block_rows = [r for r in rows if r[1] == "block"]
+    illegal_rows = [r for r in rows if r[1] == "illegal"]
+    normal_rows = [r for r in rows if r[1] == "normal"]
+
+    normal_rows.sort(key=normal_key)
+
+    if must_defend_three:
+        forced_rows = [r for r in normal_rows if r[6] > 0.0]
+        remaining_rows = [r for r in normal_rows if r[6] <= 0.0]
+
+        forced_rows.sort(
+            key=lambda r: (
+                -r[6],   # three_reduction
+                -r[7],   # live3_red
+                -r[8],   # jump3_red
+                -r[3],   # final_delta
+                r[4],    # dist
+                r[0][0],
+                r[0][1],
+            )
+        )
+
+        rows = win_rows + block_rows + forced_rows + remaining_rows + illegal_rows
+    else:
+        rows = win_rows + block_rows + normal_rows + illegal_rows
 
     if top_k is not None:
         rows = rows[:top_k]
 
     print(f"=== debug_order_moves ({stone}) ===")
-    print(f"before_eval={before_eval:.1f}\n")
+    print(f"before_eval={before_eval:.1f}")
+    print(f"opp_three_pressure={opp_three_pressure:.1f}")
+    print(f"my_attack_ready={my_attack_ready}")
+    print(f"must_defend_three={must_defend_three}\n")
 
     labels = [
         "l4", "b4+j4", "b4+l3", "dbl_l3", "j3+l3",
         "dbl_j3", "j4", "b4", "l3", "j3", "b3"
     ]
 
-    for i, (move, tag, ak, final_delta, dist, raw_delta) in enumerate(rows, 1):
+    for i, (move, tag, ak, final_delta, dist, raw_delta, three_reduction, live3_red, jump3_red) in enumerate(rows, 1):
         if tag in ("win", "block", "illegal"):
             print(f"{i:2d}. {move} | {tag} | d={dist}")
             continue
 
         active = [n for n, v in zip(labels, ak) if v]
+
         print(
-            f"{i:2d}. {move} | Δ={raw_delta:.1f} → {final_delta:.1f} | "
-            f"d={dist} | atk={active if active else ['-']}"
+            f"{i:2d}. {move} | "
+            f"three_red={three_reduction:.1f} "
+            f"(l3={live3_red:.1f}, j3={jump3_red:.1f}) | "
+            f"atk={active if active else ['-']} | "
+            f"Δ={raw_delta:.1f} → {final_delta:.1f} | "
+            f"d={dist} |"
         )
 
     return rows
