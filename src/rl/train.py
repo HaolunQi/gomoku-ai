@@ -10,7 +10,9 @@ import sys
 
 from gomoku.board import Board, BLACK, WHITE
 from gomoku import rules
+from scripts.agent_loader import load_agent
 from agents.rl_agent import RLAgent
+from heuristics.evaluate import evaluate
 
 
 def save_weights(path, weights):
@@ -57,18 +59,40 @@ def play_one_game(rl_agent, opponent, board_size, rl_stone):
     w = rules.winner(board.grid)
     return w, rl_transitions
 
+from heuristics.evaluate import evaluate
+
 
 def assign_rewards(transitions, winner, rl_stone):
-    """Assign +1/-1/0 rewards to RL agent's transitions."""
+    """Assign shaped rewards to RL transitions.
+
+    reward =
+        scaled position improvement
+        + terminal bonus (win/loss/draw) on the final RL move
+    """
     rewarded = []
+
     for board_before, stone, move, next_board, next_stone, done in transitions:
-        if winner is None:
-            reward = 0.0
-        elif winner == rl_stone:
-            reward = 1.0
-        else:
-            reward = -1.0
-        rewarded.append((board_before, stone, move, reward, next_board, next_stone, done))
+        before_score = evaluate(board_before, rl_stone)
+        after_score = evaluate(next_board, rl_stone)
+
+        # Dense shaping reward: how much this move improved the position
+        shaped = (after_score - before_score) / 1000.0
+
+        terminal = 0.0
+        if done:
+            if winner is None:
+                terminal = 0.0
+            elif winner == rl_stone:
+                terminal = 1_000.0
+            else:
+                terminal = -1_000.0
+
+        reward = shaped + terminal
+
+        rewarded.append(
+            (board_before, stone, move, reward, next_board, next_stone, done)
+        )
+
     return rewarded
 
 
@@ -85,17 +109,21 @@ def train(
     self_play=False,
     csv_log=None,
     opponent_type="random",
+    init_weights_path=None,
 ):
     """Train an RL agent via Q-learning.
 
     opponent_type: "random", "greedy", or "self" for self-play.
     If csv_log is a path, writes training stats to CSV (useful for plotting).
     """
-    from agents.random_agent import RandomAgent
-    from agents.greedy_agent import GreedyAgent
+    if init_weights_path:
+        print(f"Loading weights from {init_weights_path}")
+        init_weights = load_weights(init_weights_path)
+    else:
+        init_weights = {}
 
     agent = RLAgent(
-        weights={},
+        weights=init_weights,
         alpha=alpha,
         gamma=gamma,
         epsilon=epsilon_start,
@@ -104,10 +132,8 @@ def train(
 
     if opponent_type == "self" or self_play:
         opponent = agent
-    elif opponent_type == "greedy":
-        opponent = GreedyAgent()
     else:
-        opponent = RandomAgent()
+        opponent = load_agent(opponent_type, seed=seed)
 
     stats = {"wins": 0, "losses": 0, "draws": 0}
     rng = random.Random(seed)
@@ -166,18 +192,11 @@ def train(
 
 def evaluate_vs(weights_path, opponent_type="random", board_size=9, games=100, seed=42):
     """Evaluate trained RL agent vs a given opponent type."""
-    from agents.random_agent import RandomAgent
-    from agents.greedy_agent import GreedyAgent
-
     weights = load_weights(weights_path)
     rl = RLAgent(weights=weights, epsilon=0.0, seed=seed)
 
-    if opponent_type == "greedy":
-        opp = GreedyAgent()
-        opp_name = "Greedy"
-    else:
-        opp = RandomAgent()
-        opp_name = "Random"
+    opp = load_agent(opponent_type, seed=seed)
+    opp_name = getattr(opp, "name", opponent_type)
 
     rl_wins = 0
     opp_wins = 0
@@ -217,17 +236,19 @@ if __name__ == "__main__":
     parser.add_argument("--episodes", type=int, default=5000)
     parser.add_argument("--board-size", type=int, default=9)
     parser.add_argument("--alpha", type=float, default=0.01)
-    parser.add_argument("--gamma", type=float, default=0.95)
+    parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--out", default="weights_rl.json")
     parser.add_argument("--eval", action="store_true", help="Evaluate after training")
     parser.add_argument("--eval-only", type=str, default=None, help="Skip training, evaluate this weights file")
     parser.add_argument("--csv-log", type=str, default=None, help="Save training stats to CSV")
-    parser.add_argument("--opponent", type=str, default="random", choices=["random", "greedy", "self"], help="Opponent type")
+    parser.add_argument("--opponent", type=str, default="random", help="Opponent agent name ")
+    parser.add_argument("--init-weights", type=str, default=None, help="Path to initial weights")
+    parser.add_argument("--eval-opponents", nargs="+", default=["random", "greedy"], help="Opponent agents to evaluate against",)
     args = parser.parse_args()
 
     if args.eval_only:
-        evaluate_vs(args.eval_only, "random", board_size=args.board_size)
-        evaluate_vs(args.eval_only, "greedy", board_size=args.board_size)
+        for opp_name in args.eval_opponents:
+            evaluate_vs(args.eval_only, opp_name, board_size=args.board_size)
     else:
         train(
             out_path=args.out,
@@ -239,5 +260,5 @@ if __name__ == "__main__":
             opponent_type=args.opponent,
         )
         if args.eval:
-            evaluate_vs(args.out, "random", board_size=args.board_size)
-            evaluate_vs(args.out, "greedy", board_size=args.board_size)
+            for opp_name in args.eval_opponents:
+                evaluate_vs(args.out, opp_name, board_size=args.board_size)
