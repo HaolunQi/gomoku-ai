@@ -20,7 +20,7 @@ from ui.pygame_ui import PygameUI
 # - Agent vs Agent (watch-only):
 #     Game(board=Board(), black_agent=RandomAgent(), white_agent=RandomAgent())
 def main():
-    game = Game(board=Board(), white_agent=AlphaBetaAgent())
+    game = Game(board=Board(), black_agent=AlphaBetaAgent(), white_agent=AlphaBetaAgent())
     PygameUI().run(game)
 
 if __name__ == "__main__":
