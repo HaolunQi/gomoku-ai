@@ -12,7 +12,7 @@ from gomoku.board import Board, BLACK, WHITE
 from gomoku import rules
 from scripts.agent_loader import load_agent
 from agents.rl_agent import RLAgent
-from heuristics.evaluate import evaluate
+from heuristics.evaluate import _is_immediate_block, extract_features, _opp_next_creates_combo, evaluate
 
 
 def save_weights(path, weights):
@@ -70,24 +70,74 @@ def assign_rewards(transitions, winner, rl_stone):
         + terminal bonus (win/loss/draw) on the final RL move
     """
     rewarded = []
+    if not transitions:
+        return rewarded
 
-    for board_before, stone, move, next_board, next_stone, done in transitions:
-        before_score = evaluate(board_before, rl_stone)
-        after_score = evaluate(next_board, rl_stone)
+    n = len(transitions)
 
-        # Dense shaping reward: how much this move improved the position
-        shaped = (after_score - before_score) / 1000.0
+    for i, (board_before, stone, move, next_board, next_stone, done) in enumerate(transitions):
+        is_last_rl_move = (i == n - 1)
 
-        terminal = 0.0
-        if done:
-            if winner is None:
-                terminal = 0.0
-            elif winner == rl_stone:
-                terminal = 1_000.0
+        reward = 0.0
+
+        # 1) small eval shaping for non-final moves only
+        if not is_last_rl_move:
+            before_score = evaluate(board_before, rl_stone)
+            after_score = evaluate(next_board, rl_stone)
+
+            raw_shaped = (after_score - before_score) / 100.0
+            shaped = max(-20.0, min(20.0, raw_shaped))
+            reward += shaped
+
+        # 2) tactical shaping from order_moves logic
+        opp =  "O" if rl_stone == "X" else "X"
+
+        # immediate block reward
+        if _is_immediate_block(board_before, move, opp):
+            reward += 30.0
+
+        before_feats = extract_features(board_before, rl_stone)
+        after_feats = extract_features(next_board, rl_stone)
+
+        # strong forcing reward
+        made_live_four = after_feats.get("my_live_four", 0.0) > before_feats.get("my_live_four", 0.0)
+        made_b4_j4 = after_feats.get("my_blocked4_and_jump4", 0.0) > before_feats.get("my_blocked4_and_jump4", 0.0)
+        made_b4_l3 = after_feats.get("my_blocked4_and_live3", 0.0) > before_feats.get("my_blocked4_and_live3", 0.0)
+
+        if made_live_four:
+            reward += 60.0
+        elif made_b4_j4 or made_b4_l3:
+            reward += 50.0
+        else:
+            # second-tier forcing
+            if after_feats.get("my_double_live_three", 0.0) > before_feats.get("my_double_live_three", 0.0):
+                reward += 35.0
+            if after_feats.get("my_jump3_and_live3", 0.0) > before_feats.get("my_jump3_and_live3", 0.0):
+                reward += 30.0
+            if after_feats.get("my_double_jump_three", 0.0) > before_feats.get("my_double_jump_three", 0.0):
+                reward += 25.0
+
+        # must-defend-three style defense reward
+        live3_red = before_feats.get("opp_live_three", 0.0) - after_feats.get("opp_live_three", 0.0)
+        jump3_red = before_feats.get("opp_jump_three", 0.0) - after_feats.get("opp_jump_three", 0.0)
+        three_reduction = live3_red + jump3_red
+        reward += 20.0 * three_reduction
+
+        # punish moves that allow opponent's next combo
+        is_strong_forcing = made_live_four or made_b4_j4 or made_b4_l3
+        if not is_strong_forcing:
+            opp_moves = next_board.candidate_moves(radius=2)
+            if _opp_next_creates_combo(next_board, rl_stone, opp_moves):
+                reward -= 80.0
+
+        # 3) terminal outcome goes to the last RL move
+        if is_last_rl_move:
+            if winner == rl_stone:
+                reward += 100.0
+            elif winner is None:
+                reward += 0.0
             else:
-                terminal = -1_000.0
-
-        reward = shaped + terminal
+                reward -= 100.0
 
         rewarded.append(
             (board_before, stone, move, reward, next_board, next_stone, done)

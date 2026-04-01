@@ -29,7 +29,7 @@ class RLAgent(Agent):
         self._rng = random.Random(seed)
 
     def select_move(self, board, stone):
-        moves = board.legal_moves()
+        moves = board.candidate_moves()
         if not moves:
             raise RuntimeError("No legal moves available (game is over).")
 
