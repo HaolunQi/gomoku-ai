@@ -31,13 +31,13 @@ BASE_PATTERN_WEIGHTS = {
     "blocked_jump_four": 250.0,
 
     # forcing structures
-    "double_jump_three": 600.0,
-    "jump3_and_live3": 700.0,
-    "double_live_three": 800.0,
-    "blocked4_and_jump3": 800.0,
-    "blocked4_and_live3": 900.0,
+    "double_live_three": 1000.0,
+    "double_jump_three": 800.0,
+    "jump3_and_live3": 1000.0,
     "double_blocked_four": 1000.0,
     "blocked4_and_jump4": 1000.0,
+    "blocked4_and_live3": 1000.0,
+    "blocked4_and_jump3": 1000.0
 }
 
 WIN_SCORE = 1_0000.0

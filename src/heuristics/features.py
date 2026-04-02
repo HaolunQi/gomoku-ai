@@ -1,5 +1,6 @@
 # heuristics/features.py
 # Shared feature extraction used by AB + RL
+# IMPORTANT: Keep features simple + stable. Add new features only when tests cover them.
 
 from gomoku.board import BLACK, WHITE, EMPTY
 
@@ -97,43 +98,53 @@ def _count_line_patterns(line, stone):
         i = j
 
     # --- jump-three / blocked-jump-three ---
+    open_jump_three_patterns = [
+        [EMPTY, stone, stone, EMPTY, stone, EMPTY],   # _XX_X_
+        [EMPTY, stone, EMPTY, stone, stone, EMPTY],   # _X_XX_
+    ]
+
+    for i in range(n - 5):
+        w = line[i:i + 6]
+        if w in open_jump_three_patterns:
+            jump_three += 1
+
+    blocked_jump_three_patterns = [
+        [stone, stone, EMPTY, stone, EMPTY],   # XX_X_
+        [stone, EMPTY, stone, stone, EMPTY],   # X_XX_
+        [EMPTY, stone, stone, EMPTY, stone],   # _XX_X
+        [EMPTY, stone, EMPTY, stone, stone],   # _X_XX
+    ]
+
     for i in range(n - 4):
         w = line[i:i + 5]
-
-        patterns = [
-            [EMPTY, stone, stone, EMPTY, stone],
-            [EMPTY, stone, EMPTY, stone, stone],
-            [stone, stone, EMPTY, stone, EMPTY],
-            [stone, EMPTY, stone, stone, EMPTY],
-        ]
-
-        if w in patterns:
-            left_open = (i - 1 >= 0 and line[i - 1] == EMPTY)
-            right_open = (i + 5 < n and line[i + 5] == EMPTY)
-
-            if left_open and right_open:
-                jump_three += 1
-            else:
-                blocked_jump_three += 1
+        if w in blocked_jump_three_patterns:
+            blocked_jump_three += 1
 
     # --- jump-four / blocked-jump-four ---
-    for i in range(n - 4):
-        w = line[i:i + 5]
+    open_jump_four_patterns = [
+        [EMPTY, stone, stone, stone, EMPTY, stone, EMPTY],  # _XXX_X_
+        [EMPTY, stone, stone, EMPTY, stone, stone, EMPTY],  # _XX_XX_
+        [EMPTY, stone, EMPTY, stone, stone, stone, EMPTY],  # _X_XXX_
+    ]
 
-        patterns = [
-            [stone, stone, stone, EMPTY, stone],
-            [stone, stone, EMPTY, stone, stone],
-            [stone, EMPTY, stone, stone, stone],
-        ]
+    for i in range(n - 6):
+        w = line[i:i + 7]
+        if w in open_jump_four_patterns:
+            jump_four += 1
 
-        if w in patterns:
-            left_open = (i - 1 >= 0 and line[i - 1] == EMPTY)
-            right_open = (i + 5 < n and line[i + 5] == EMPTY)
+    blocked_jump_four_patterns = [
+        [stone, stone, stone, EMPTY, stone, EMPTY],   # XXX_X_
+        [stone, stone, EMPTY, stone, stone, EMPTY],   # XX_XX_
+        [stone, EMPTY, stone, stone, stone, EMPTY],   # X_XXX_
+        [EMPTY, stone, stone, stone, EMPTY, stone],   # _XXX_X
+        [EMPTY, stone, stone, EMPTY, stone, stone],   # _XX_XX
+        [EMPTY, stone, EMPTY, stone, stone, stone],   # _X_XXX
+    ]
 
-            if left_open and right_open:
-                jump_four += 1
-            else:
-                blocked_jump_four += 1
+    for i in range(n - 5):
+        w = line[i:i + 6]
+        if w in blocked_jump_four_patterns:
+            blocked_jump_four += 1
 
     return {
         "live_two": live_two,
@@ -184,9 +195,16 @@ def extract_features(board, stone):
     opp_count = 0
     empty_count = 0
 
-    # Normalize pattern counts to [0, 1] range by dividing by reasonable max.
-    # On a 9x9 board you rarely see more than ~4 of any pattern at once.
-    PAT_NORM = 4.0
+    for r in range(n):
+        row = grid[r]
+        for c in range(n):
+            v = row[c]
+            if v == stone:
+                my_count += 1
+            elif v == opp:
+                opp_count += 1
+            elif v == EMPTY:
+                empty_count += 1
 
     # --- pattern features ---
     my_patterns = _collect_patterns(grid, stone)

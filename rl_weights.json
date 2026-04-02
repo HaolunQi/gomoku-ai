@@ -1,0 +1,29 @@
+{
+  "bias": 0.0,
+
+  "my_live_four": 120.0,
+  "my_jump_four": 80.0,
+  "my_blocked_four": 28.0,
+
+  "my_double_live_three": 70.0,
+  "my_jump3_and_live3": 55.0,
+  "my_double_jump_three": 40.0,
+
+  "my_live_three": 18.0,
+  "my_jump_three": 14.0,
+  "my_blocked_three": 8.0,
+  "my_live_two": 3.0,
+
+  "opp_live_four": -115.0,
+  "opp_jump_four": -75.0,
+  "opp_blocked_four": -30.0,
+
+  "opp_double_live_three": -72.0,
+  "opp_jump3_and_live3": -58.0,
+  "opp_double_jump_three": -42.0,
+
+  "opp_live_three": -22.0,
+  "opp_jump_three": -18.0,
+  "opp_blocked_three": -9.0,
+  "opp_live_two": -3.5
+}
