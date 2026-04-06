@@ -328,7 +328,7 @@ if __name__ == "__main__":
     parser.add_argument("--episodes", type=int, default=5000)
     parser.add_argument("--board-size", type=int, default=9)
     parser.add_argument("--alpha", type=float, default=0.01)
-    parser.add_argument("--gamma", type=float, default=0.99)
+    parser.add_argument("--gamma", type=float, default=0.0)
     parser.add_argument("--out", default="weights_rl.json")
     parser.add_argument("--eval", action="store_true", help="Evaluate after training")
     parser.add_argument("--eval-only", type=str, default=None, help="Skip training, evaluate this weights file")
