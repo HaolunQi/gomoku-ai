@@ -1,4 +1,2 @@
-numpy==2.2.6
-pygame-ce==2.5.6
-pytest==9.0.2
-gunicorn
+flask>=3.0.0
+gunicorn>=22.0.0
