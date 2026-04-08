@@ -8,30 +8,56 @@
 </head>
 <body>
   <main class="wrap">
-    <h1>Gomoku</h1>
+    <header class="page-head">
+      <h1 class="title">Gomoku</h1>
+      <ul class="rules" aria-label="How to play">
+        <li>First to get five in a row (horizontal, vertical, or diagonal) wins.</li>
+      </ul>
+    </header>
 
     <section class="controls">
-      <label>
-        You play:
-        <select id="sideSelect">
+      <label class="field">
+        <span class="field__label">You play</span>
+        <select id="sideSelect" class="select">
           <option value="black">Black (first)</option>
           <option value="white">White (AI first)</option>
         </select>
       </label>
-      <button type="button" id="newBtn">New Game</button>
+      <button type="button" id="newBtn" class="btn btn--secondary">New game</button>
     </section>
 
-    <p id="status" class="status" aria-live="polite">Click &quot;New Game&quot; to play.</p>
+    <p id="status" class="status" aria-live="polite">Choose a side, then start on the board.</p>
 
     <div class="board-shell">
-      <div
-        id="board"
-        class="board"
-        role="application"
-        aria-label="Gomoku board, 15 by 15 intersections"
-      >
-        <div class="board-lines" aria-hidden="true"></div>
-        <div id="intersections" class="board-intersections"></div>
+      <div class="board-frame" id="boardFrame">
+        <div class="coord-spacer" aria-hidden="true"></div>
+        <div class="coord-cols" id="coordCols" aria-hidden="true"></div>
+        <div class="coord-rows" id="coordRows" aria-hidden="true"></div>
+        <div
+          id="board"
+          class="board"
+          role="application"
+          aria-label="Gomoku board, 15 by 15 intersections"
+        >
+          <div class="board-lines" aria-hidden="true"></div>
+          <div class="board-stars" aria-hidden="true">
+            <span class="star-point" style="--sr: 3; --sc: 3"></span>
+            <span class="star-point" style="--sr: 3; --sc: 11"></span>
+            <span class="star-point" style="--sr: 7; --sc: 7"></span>
+            <span class="star-point" style="--sr: 11; --sc: 3"></span>
+            <span class="star-point" style="--sr: 11; --sc: 11"></span>
+          </div>
+          <div id="intersections" class="board-intersections"></div>
+          <div class="board-shade" aria-hidden="true"></div>
+          <div class="board-overlay board-overlay--start" id="startOverlay">
+            <div class="start-card">
+              <p class="start-card__hint">Ready when you are</p>
+              <button type="button" id="startBoardBtn" class="btn btn--primary">
+                Start game
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </main>
