@@ -2,6 +2,12 @@
 
 Gomoku (15x15, five-in-a-row) with a clean separation between **game logic**, **agents**, and **pygame UI**.
 
+## Play Online
+
+👉 https://gomoku-web-production.up.railway.app/
+
+Play Gomoku against AI directly in your browser.
+
 ## Quick start
 
 Requires **Python 3.14+**.
