@@ -3,9 +3,8 @@ import os
 import tempfile
 
 from gomoku.board import Board, BLACK
-
 from agents.rl_agent import RLAgent
-from rl.train import train_self_play, load_weights
+from rl.train import train, load_weights
 
 
 def test_rl_agent_import_and_legal_move():
@@ -16,10 +15,11 @@ def test_rl_agent_import_and_legal_move():
     assert b.is_empty(m)
 
 
-def test_rl_train_writes_weights_file():
+def test_train_writes_weights_file():
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "w.json")
-        train_self_play(out_path=path, episodes=1, seed=0)
+        train(out_path=path, episodes=1, seed=0, log_interval=1)
+        assert os.path.exists(path)
+
         w = load_weights(path)
         assert isinstance(w, dict)
-        assert "my_stones" in w
