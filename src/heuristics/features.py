@@ -1,16 +1,13 @@
-# heuristics/features.py
-# Shared feature extraction used by AB + RL
-# IMPORTANT: Keep features simple + stable. Add new features only when tests cover them.
-
 from gomoku.board import BLACK, WHITE, EMPTY
 
 
 def _other(stone):
+    # return opponent stone
     return WHITE if stone == BLACK else BLACK
 
 
 def _iter_lines(grid):
-    # Iterate all rows, columns, and diagonals
+    # iterate all rows, columns, and diagonals
     n = len(grid)
 
     # rows
@@ -43,10 +40,7 @@ def _iter_lines(grid):
 
 
 def _count_line_patterns(line, stone):
-    # Count patterns in a single line:
-    # live two / blocked two / live three / blocked three / live four / blocked four
-    # plus jump three / jump four
-
+    # count patterns in a single line
     n = len(line)
 
     live_two = 0
@@ -60,7 +54,6 @@ def _count_line_patterns(line, stone):
     jump_four = 0
     blocked_jump_four = 0
 
-    # --- original consecutive-run logic ---
     i = 0
     while i < n:
         if line[i] != stone:
@@ -73,7 +66,7 @@ def _count_line_patterns(line, stone):
 
         run_len = j - i
 
-        # Treat boundary as blocked
+        # check openness of ends
         left_open = (i - 1 >= 0 and line[i - 1] == EMPTY)
         right_open = (j < n and line[j] == EMPTY)
 
@@ -97,53 +90,51 @@ def _count_line_patterns(line, stone):
 
         i = j
 
-    # --- jump-three / blocked-jump-three ---
+    # open jump three patterns
     open_jump_three_patterns = [
-        [EMPTY, stone, stone, EMPTY, stone, EMPTY],   # _XX_X_
-        [EMPTY, stone, EMPTY, stone, stone, EMPTY],   # _X_XX_
+        [EMPTY, stone, stone, EMPTY, stone, EMPTY],
+        [EMPTY, stone, EMPTY, stone, stone, EMPTY],
     ]
 
     for i in range(n - 5):
-        w = line[i:i + 6]
-        if w in open_jump_three_patterns:
+        if line[i:i + 6] in open_jump_three_patterns:
             jump_three += 1
 
+    # blocked jump three patterns
     blocked_jump_three_patterns = [
-        [stone, stone, EMPTY, stone, EMPTY],   # XX_X_
-        [stone, EMPTY, stone, stone, EMPTY],   # X_XX_
-        [EMPTY, stone, stone, EMPTY, stone],   # _XX_X
-        [EMPTY, stone, EMPTY, stone, stone],   # _X_XX
+        [stone, stone, EMPTY, stone, EMPTY],
+        [stone, EMPTY, stone, stone, EMPTY],
+        [EMPTY, stone, stone, EMPTY, stone],
+        [EMPTY, stone, EMPTY, stone, stone],
     ]
 
     for i in range(n - 4):
-        w = line[i:i + 5]
-        if w in blocked_jump_three_patterns:
+        if line[i:i + 5] in blocked_jump_three_patterns:
             blocked_jump_three += 1
 
-    # --- jump-four / blocked-jump-four ---
+    # open jump four patterns
     open_jump_four_patterns = [
-        [EMPTY, stone, stone, stone, EMPTY, stone, EMPTY],  # _XXX_X_
-        [EMPTY, stone, stone, EMPTY, stone, stone, EMPTY],  # _XX_XX_
-        [EMPTY, stone, EMPTY, stone, stone, stone, EMPTY],  # _X_XXX_
+        [EMPTY, stone, stone, stone, EMPTY, stone, EMPTY],
+        [EMPTY, stone, stone, EMPTY, stone, stone, EMPTY],
+        [EMPTY, stone, EMPTY, stone, stone, stone, EMPTY],
     ]
 
     for i in range(n - 6):
-        w = line[i:i + 7]
-        if w in open_jump_four_patterns:
+        if line[i:i + 7] in open_jump_four_patterns:
             jump_four += 1
 
+    # blocked jump four patterns
     blocked_jump_four_patterns = [
-        [stone, stone, stone, EMPTY, stone, EMPTY],   # XXX_X_
-        [stone, stone, EMPTY, stone, stone, EMPTY],   # XX_XX_
-        [stone, EMPTY, stone, stone, stone, EMPTY],   # X_XXX_
-        [EMPTY, stone, stone, stone, EMPTY, stone],   # _XXX_X
-        [EMPTY, stone, stone, EMPTY, stone, stone],   # _XX_XX
-        [EMPTY, stone, EMPTY, stone, stone, stone],   # _X_XXX
+        [stone, stone, stone, EMPTY, stone, EMPTY],
+        [stone, stone, EMPTY, stone, stone, EMPTY],
+        [stone, EMPTY, stone, stone, stone, EMPTY],
+        [EMPTY, stone, stone, stone, EMPTY, stone],
+        [EMPTY, stone, stone, EMPTY, stone, stone],
+        [EMPTY, stone, EMPTY, stone, stone, stone],
     ]
 
     for i in range(n - 5):
-        w = line[i:i + 6]
-        if w in blocked_jump_four_patterns:
+        if line[i:i + 6] in blocked_jump_four_patterns:
             blocked_jump_four += 1
 
     return {
@@ -161,7 +152,7 @@ def _count_line_patterns(line, stone):
 
 
 def _collect_patterns(grid, stone):
-    # Aggregate pattern counts over all lines
+    # aggregate pattern counts over all lines
     totals = {
         "live_two": 0,
         "blocked_two": 0,
@@ -184,21 +175,18 @@ def _collect_patterns(grid, stone):
 
 
 def extract_features(board, stone):
-    # Return a dict[str, float]-like mapping (plain dict is fine)
-
+    # extract global features for both sides
     opp = _other(stone)
     grid = board.grid
     n = board.size
 
-    # --- basic counts ---
     my_count = 0
     opp_count = 0
     empty_count = 0
 
     for r in range(n):
-        row = grid[r]
         for c in range(n):
-            v = row[c]
+            v = grid[r][c]
             if v == stone:
                 my_count += 1
             elif v == opp:
@@ -206,15 +194,10 @@ def extract_features(board, stone):
             elif v == EMPTY:
                 empty_count += 1
 
-    # --- pattern features ---
     my_patterns = _collect_patterns(grid, stone)
     opp_patterns = _collect_patterns(grid, opp)
 
-    # --- combined patterns ---
-    # Keep our own attacking combos conservative:
-    # do NOT let jump-three strongly boost our own offense.
-    # But do treat opponent jump-three as a real danger signal.
-
+    # derived combo features
     my_double_live_three = 1.0 if my_patterns["live_three"] >= 2 else 0.0
     opp_double_live_three = 1.0 if opp_patterns["live_three"] >= 2 else 0.0
 
@@ -234,13 +217,18 @@ def extract_features(board, stone):
     opp_blocked4_and_live3 = 1.0 if opp_patterns["blocked_four"] >= 1 and opp_patterns["live_three"] >= 1 else 0.0
 
     my_blocked4_and_jump3 = 1.0 if my_patterns["blocked_four"] >= 1 and my_patterns["jump_three"] >= 1 else 0.0
-    oop_blocked4_and_jump3 = 1.0 if opp_patterns["blocked_four"] >= 1 and opp_patterns["jump_three"] >= 1 else 0.0
+    opp_blocked4_and_jump3 = 1.0 if opp_patterns["blocked_four"] >= 1 and opp_patterns["jump_three"] >= 1 else 0.0
+
+    my_double_jump_four = 1.0 if my_patterns["jump_four"] >= 2 else 0.0
+    opp_double_jump_four = 1.0 if opp_patterns["jump_four"] >= 2 else 0.0
 
     feats = {
+        # counts
         "my_stones": float(my_count),
         "opp_stones": float(opp_count),
         "empty": float(empty_count),
 
+        # my patterns
         "my_live_two": float(my_patterns["live_two"]),
         "my_blocked_two": float(my_patterns["blocked_two"]),
         "my_live_three": float(my_patterns["live_three"]),
@@ -252,6 +240,7 @@ def extract_features(board, stone):
         "my_jump_four": float(my_patterns["jump_four"]),
         "my_blocked_jump_four": float(my_patterns["blocked_jump_four"]),
 
+        # opponent patterns
         "opp_live_two": float(opp_patterns["live_two"]),
         "opp_blocked_two": float(opp_patterns["blocked_two"]),
         "opp_live_three": float(opp_patterns["live_three"]),
@@ -263,6 +252,7 @@ def extract_features(board, stone):
         "opp_jump_four": float(opp_patterns["jump_four"]),
         "opp_blocked_jump_four": float(opp_patterns["blocked_jump_four"]),
 
+        # combo features
         "my_double_live_three": my_double_live_three,
         "my_double_jump_three": my_double_jump_three,
         "my_jump3_and_live3": my_jump3_and_live3,
@@ -270,6 +260,7 @@ def extract_features(board, stone):
         "my_blocked4_and_jump4": my_blocked4_and_jump4,
         "my_blocked4_and_live3": my_blocked4_and_live3,
         "my_blocked4_and_jump3": my_blocked4_and_jump3,
+        "my_double_jump_four": my_double_jump_four,
 
         "opp_double_live_three": opp_double_live_three,
         "opp_double_jump_three": opp_double_jump_three,
@@ -277,14 +268,15 @@ def extract_features(board, stone):
         "opp_double_blocked_four": opp_double_blocked_four,
         "opp_blocked4_and_jump4": opp_blocked4_and_jump4,
         "opp_blocked4_and_live3": opp_blocked4_and_live3,
-        "oop_blocked4_and_jump3": oop_blocked4_and_jump3,
+        "opp_blocked4_and_jump3": opp_blocked4_and_jump3,
+        "opp_double_jump_four": opp_double_jump_four,
     }
 
     return feats
 
 
 def featurize_after_move(board, stone, move):
-    # Convenience for RL: copy board, apply move, then extract features
+    # features after applying move
     b2 = board.copy()
     ok = b2.place(move, stone)
     if not ok:
