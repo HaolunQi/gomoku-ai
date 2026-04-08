@@ -1,20 +1,12 @@
 import time
-
 from agents.base import Agent
 from gomoku.board import BLACK, WHITE
 from gomoku import rules
-
-try:
-    from heuristics.evaluate import evaluate, order_moves
-except ImportError:
-    def evaluate(board, stone, weights=None):
-        return 0.0
-
-    def order_moves(board, moves, stone, weights=None):
-        return list(moves)
+from heuristics.evaluate import evaluate, order_moves
 
 
 class _SearchCutoff(Exception):
+    # raised when time/node budget exceeded
     pass
 
 
@@ -22,6 +14,7 @@ class AlphaBetaAgent(Agent):
     name = "alphabeta"
 
     def __init__(self, max_depth=2, node_budget=5000, time_budget_ms=200, weights=None):
+        # search limits and eval weights
         self.max_depth = max_depth
         self.node_budget = node_budget
         self.time_budget_ms = time_budget_ms
@@ -30,11 +23,10 @@ class AlphaBetaAgent(Agent):
         self._nodes = 0
         self._t0 = 0.0
 
-        # Simple transposition table:
-        # key -> (searched_depth, value)
-        self._tt = {}
+        self._tt = {}  # transposition table
 
     def select_move(self, board, stone):
+        # iterative deepening with move ordering
         moves = board.candidate_moves()
         if not moves:
             raise RuntimeError("No legal moves available (game is over).")
@@ -55,6 +47,7 @@ class AlphaBetaAgent(Agent):
         return best_move
 
     def _reset_search_state(self):
+        # reset counters and tt
         self._nodes = 0
         self._t0 = time.perf_counter()
         self._tt = {}
@@ -72,6 +65,7 @@ class AlphaBetaAgent(Agent):
         return self._nodes >= int(self.node_budget)
 
     def _check_budget(self):
+        # stop search if budget exceeded
         if self._time_exceeded() or self._node_exceeded():
             raise _SearchCutoff
 
@@ -80,12 +74,12 @@ class AlphaBetaAgent(Agent):
         self._check_budget()
 
     def _board_key(self, board, current_turn, depth):
-        # Replace this later with a stronger board hash if available.
-        # Assumes board.grid is hashable after tuple conversion.
+        # key for transposition table
         grid_key = tuple(tuple(row) for row in board.grid)
         return (grid_key, current_turn, depth)
 
     def _lookup_tt(self, board, current_turn, depth):
+        # retrieve cached value if depth sufficient
         key = self._board_key(board, current_turn, depth)
         entry = self._tt.get(key)
         if entry is None:
@@ -97,12 +91,14 @@ class AlphaBetaAgent(Agent):
         return None
 
     def _store_tt(self, board, current_turn, depth, value):
+        # store value if deeper
         key = self._board_key(board, current_turn, depth)
         old = self._tt.get(key)
         if old is None or old[0] < depth:
             self._tt[key] = (depth, value)
 
     def _search_root(self, board, stone, depth):
+        # root search (max node)
         self._check_budget()
 
         moves = board.candidate_moves()
@@ -144,6 +140,16 @@ class AlphaBetaAgent(Agent):
         return best_move, best_value
 
     def _search_value(self, board, root_stone, current_turn, depth, alpha, beta):
+        # alpha-beta recursion:
+        # 1. check budget and count node
+        # 2. if terminal or depth==0 -> evaluate and return
+        # 3. lookup TT, return if hit
+        # 4. generate and order moves
+        # 5. recurse:
+        #    - max node: maximize value, update alpha
+        #    - min node: minimize value, update beta
+        # 6. prune when alpha >= beta
+        # 7. store in TT and return value
         self._count_node_and_check_budget()
 
         winner = rules.winner(board.grid)
@@ -165,6 +171,7 @@ class AlphaBetaAgent(Agent):
         moves = order_moves(board, moves, current_turn, self.weights)
 
         if current_turn == root_stone:
+            # max node
             value = float("-inf")
             for move in moves:
                 self._check_budget()
@@ -188,6 +195,7 @@ class AlphaBetaAgent(Agent):
                 if alpha >= beta:
                     break
         else:
+            # min node
             value = float("inf")
             for move in moves:
                 self._check_budget()
