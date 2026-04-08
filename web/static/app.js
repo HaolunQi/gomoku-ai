@@ -63,13 +63,6 @@ function deriveLastMove(prev, next, humanCoord) {
   return { r: last[0], c: last[1] };
 }
 
-/**
- * Finds a maximal consecutive segment of `stone` along standard directions;
- * returns all cells in that segment if length >= 5 (for UI highlighting).
- * @param {string[][]} g
- * @param {string} stone
- * @returns {Array<[number, number]> | null}
- */
 function findWinningSegment(g, stone) {
   const dirs = [
     [1, 0],
@@ -284,18 +277,29 @@ async function handleCellClick(row, col) {
   if (gameOver || toMove !== humanSideStone()) return;
   if (grid[r][c] !== EMPTY) return;
 
-  const prevGrid = cloneGrid(grid);
+  const preMoveGrid = cloneGrid(grid);
+  const preMoveToMove = toMove;
+  const preMoveLastMove = lastMove ? { r: lastMove.r, c: lastMove.c } : null;
+  const preMoveWinningCells = winningCells;
 
-  setStatus("Sending move…");
+  const humanStone = humanSideStone();
+  grid = cloneGrid(preMoveGrid);
+  grid[r][c] = humanStone;
+  lastMove = { r, c };
+  toMove = humanStone === BLACK ? WHITE : BLACK;
+  winningCells = null;
+
+  setStatus("Sending move...");
   setBoardWaiting(true);
+  renderBoard();
 
   const res = await fetch("/api/move", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      grid,
+      grid: preMoveGrid,
       human_side: sideSelect.value,
-      to_move: toMove,
+      to_move: preMoveToMove,
       move: [r, c],
     }),
   });
@@ -303,12 +307,15 @@ async function handleCellClick(row, col) {
   setBoardWaiting(false);
 
   if (!res.ok) {
+    grid = preMoveGrid;
+    lastMove = preMoveLastMove;
+    winningCells = preMoveWinningCells;
+    toMove = preMoveToMove;
     setStatus(data.error || "Move failed.");
     renderBoard();
-    updateStatusLine();
     return;
   }
-  applyServerState(data, { prevGrid, humanMove: [r, c] });
+  applyServerState(data, { prevGrid: preMoveGrid, humanMove: [r, c] });
 }
 
 newBtn.addEventListener("click", () => {

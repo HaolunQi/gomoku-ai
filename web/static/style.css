@@ -155,21 +155,10 @@ body {
   width: 100%;
 }
 
-/*
- * Frame: coordinates live in separate grid tracks so the wood board keeps
- * a full margin (--pad) inside its border; labels never sit under stones or lines.
- */
 .board-frame {
   --label-w: clamp(1rem, 3.8vw, 1.65rem);
   --label-h: clamp(1rem, 3.8vw, 1.65rem);
-  /*
-   * Inner padding from wood inner edge to first/last grid line; must clear
-   * half the stone (--stone) to avoid edge cropping.
-   */
   --pad: clamp(11px, 2.8vmin, 22px);
-  /*
-   * Total wood side: cap by viewport so coords + board fit without horizontal scroll.
-   */
   --board-side: min(
     calc(100vw - 2 * var(--wrap-inline-pad, 1.25rem) - var(--label-w)),
     min(88vmin, 38rem)
@@ -260,7 +249,6 @@ body {
   z-index: 0;
   left: var(--pad);
   top: var(--pad);
-  /* +1px so the 15th line’s 1px stroke is not clipped at the bottom/right edge */
   width: calc(var(--grid-span) + 1px);
   height: calc(var(--grid-span) + 1px);
   pointer-events: none;
@@ -277,7 +265,6 @@ body {
     );
 }
 
-/* Exactly five hoshi; 0-based rows/cols on 15×15 */
 .board-stars {
   position: absolute;
   z-index: 0;
@@ -321,17 +308,6 @@ body {
   pointer-events: none;
   background: rgba(28, 25, 23, 0);
   transition: background 0.25s ease;
-}
-
-.board--waiting .board-shade {
-  background: rgba(28, 25, 23, 0.06);
-}
-
-.board--waiting .board {
-  box-shadow:
-    0 4px 18px rgba(45, 28, 12, 0.22),
-    0 0 0 2px rgba(59, 130, 246, 0.2),
-    0 1px 0 rgba(255, 255, 255, 0.35) inset;
 }
 
 .board-overlay {
@@ -471,7 +447,6 @@ body {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
-/* Last move: ring marker outside stone */
 .intersection .last-marker {
   position: absolute;
   left: 50%;
@@ -520,7 +495,6 @@ body {
     0 0 0 1px rgba(255, 255, 255, 0.75) inset;
 }
 
-/* Game over emphasis on status */
 .status.status--gameover {
   color: #a16207;
   font-size: 0.95rem;
