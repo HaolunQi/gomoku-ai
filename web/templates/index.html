@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gomoku (Web)</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Gomoku</h1>
+
+    <section class="controls">
+      <label>
+        You play:
+        <select id="sideSelect">
+          <option value="black">Black (first)</option>
+          <option value="white">White (AI first)</option>
+        </select>
+      </label>
+      <button type="button" id="newBtn">New Game</button>
+    </section>
+
+    <p id="status" class="status" aria-live="polite">Click &quot;New Game&quot; to play.</p>
+
+    <div class="board-shell">
+      <div
+        id="board"
+        class="board"
+        role="application"
+        aria-label="Gomoku board, 15 by 15 intersections"
+      >
+        <div class="board-lines" aria-hidden="true"></div>
+        <div id="intersections" class="board-intersections"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
