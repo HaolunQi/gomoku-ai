@@ -3,7 +3,6 @@ from agents.base import Agent
 
 class HumanAgent(Agent):
     # Human-controlled agent via stdin
-
     name = "human"
 
     def __init__(self, prompt=None):
