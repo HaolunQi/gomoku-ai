@@ -3,7 +3,6 @@ import pygame as pg
 
 from gomoku.game import Game
 from gomoku.board import Board, BLACK, WHITE, EMPTY, BOARD_SIZE
-from heuristics.evaluate import debug_evaluate, debug_order_moves
 
 
 class PygameUI:
@@ -216,9 +215,6 @@ class PygameUI:
 
         print(f"\n[FORCE PLACE] move={move}")
         print(game.board)
-        debug_evaluate(game.board, game.to_move)
-        moves = game.board.candidate_moves()
-        debug_order_moves(game.board, moves, game.to_move, top_k=10)
 
     def run(self, game):
         # Main pygame loop
@@ -276,25 +272,16 @@ class PygameUI:
                             print("\nPaused. Current board:")
                             print(game.board)
                             print("Next to move:", game.to_move)
-                            debug_evaluate(game.board, game.to_move)
-                            moves = game.board.candidate_moves()
-                            debug_order_moves(game.board, moves, game.to_move, top_k=10)
 
                     elif event.key == pg.K_RIGHT and self.paused and not w:
                         self._step_ai_once(game)
                         print("\nForward. Current board:")
                         print(game.board)
-                        moves = game.board.candidate_moves()
-                        debug_evaluate(game.board, game.to_move)
-                        debug_order_moves(game.board, moves, game.to_move, top_k=10)
 
                     elif event.key == pg.K_LEFT and self.paused:
                         game = self._undo(game)
                         print("\nBack. Current board:")
                         print(game.board)
-                        moves = game.board.candidate_moves()
-                        debug_evaluate(game.board, game.to_move)
-                        debug_order_moves(game.board, moves, game.to_move, top_k=10)
 
                     elif event.key == pg.K_f and self.paused:
                         self.force_mode = not self.force_mode
