@@ -197,7 +197,32 @@ def _attack_subscore_from_deltas(d):
     )
 
 
-def _is_strong_threat_after_move(board, move, stone):
+def _is_three_threat_after_move(board, move, stone):
+    # check if move creates forcing threat
+    b = _simulate_move(board, move, stone)
+    if b is None:
+        return False
+
+    feats = extract_features(b, stone)
+    return (
+        feats.get("my_double_live_three", 0.0) > 0.0
+        or feats.get("my_jump3_and_live3", 0.0) > 0.0
+        or feats.get("my_double_jump_three", 0.0) > 0.0
+    )
+
+def _opp_three_threat_points(board, stone):
+    # opponent moves that create an immediate forcing threat
+    opp = _other(stone)
+    pts = set()
+
+    for m in board.candidate_moves(radius=2):
+        if _is_three_threat_after_move(board, m, opp):
+            pts.add(m)
+
+    return pts
+
+
+def _is_four_threat_after_move(board, move, stone):
     # check if move creates forcing threat
     b = _simulate_move(board, move, stone)
     if b is None:
@@ -209,19 +234,16 @@ def _is_strong_threat_after_move(board, move, stone):
         or feats.get("my_blocked4_and_jump4", 0.0) > 0.0
         or feats.get("my_double_jump_four", 0.0) > 0.0
         or feats.get("my_blocked4_and_live3", 0.0) > 0.0
-        or feats.get("my_double_live_three", 0.0) > 0.0
-        or feats.get("my_jump3_and_live3", 0.0) > 0.0
-        or feats.get("my_double_jump_three", 0.0) > 0.0
     )
 
 
-def _opp_immediate_threat_points(board, stone):
+def _opp_four_threat_points(board, stone):
     # opponent moves that create an immediate forcing threat
     opp = _other(stone)
     pts = set()
 
     for m in board.candidate_moves(radius=2):
-        if _is_strong_threat_after_move(board, m, opp):
+        if _is_four_threat_after_move(board, m, opp):
             pts.add(m)
 
     return pts
@@ -243,7 +265,7 @@ def _opp_next_three_to_threat_points(board, stone):
             continue
 
         for m2 in b1.candidate_moves(radius=2):
-            if _is_strong_threat_after_move(b1, m2, opp):
+            if _is_four_threat_after_move(b1, m2, opp):
                 pts.add(m1)
                 break
 
@@ -268,7 +290,8 @@ def _defense_sort_key(item):
     # defense ordering: critical cover first, then threat reduction
     move = item["move"]
     return (
-        -int(item["covers_critical_point"]),
+        -int(item["covers_four_threat_point"]),
+        -int(item["covers_three_threat_point"]),
         -item["threat_drop"],
         -item["tier"],
         -item["subscore"],
@@ -299,12 +322,14 @@ def order_moves(board, moves, stone, weights=None):
 
     opp_level = _level_from_feats(before_feats, "opp")
     my_level = _level_from_feats(before_feats, "my")
-    opp_threat_points = _opp_immediate_threat_points(board, stone)
+    opp_three_threat_points = _opp_three_threat_points(board, stone)
+    opp_four_threat_points = _opp_four_threat_points(board, stone)
     opp_three_to_threat_points = _opp_next_three_to_threat_points(board, stone)
 
     # defend only if we have no real attack and opponent has pressure
     must_defend = (
-        my_level < 1 and (opp_level >= 1 or bool(opp_threat_points) or bool(opp_three_to_threat_points))
+        my_level < 1 
+        and (opp_level >= 1 or bool(opp_four_threat_points) or bool(opp_three_threat_points) or bool(opp_three_to_threat_points))
     )
 
     winning_moves = []
@@ -339,7 +364,8 @@ def order_moves(board, moves, stone, weights=None):
                 "subscore": _attack_subscore_from_deltas(d),
                 "delta": after_eval - before_eval,
                 "dist": abs(r - center[0]) + abs(c - center[1]),
-                "covers_critical_point": move in opp_threat_points,
+                "covers_four_threat_point": move in opp_four_threat_points,
+                "covers_three_threat_point": move in opp_three_threat_points,
                 "blocks_three_to_threat": move in opp_three_to_threat_points,
             }
         )
@@ -357,12 +383,13 @@ def order_moves(board, moves, stone, weights=None):
         threat_drop = before_opp_level - after_opp_level
 
         # keep only moves that actually reduce opponent threat level
-        if item["covers_critical_point"] or threat_drop > 0:
+        if item["covers_four_threat_point"] or threat_drop > 0:
             forced_defense_moves.append(
                 {
                     "move": item["move"],
                     "threat_drop": threat_drop,
-                    "covers_critical_point": item["covers_critical_point"],
+                    "covers_four_threat_point": item["covers_four_threat_point"],
+                    "covers_three_threat_point": item["covers_three_threat_point"],
                     "tier": item["tier"],
                     "subscore": item["subscore"],
                     "delta": item["delta"],
