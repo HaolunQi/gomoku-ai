@@ -321,7 +321,7 @@ def order_moves(board, moves, stone, weights=None):
     cand2 = list(board.candidate_moves(radius=2))
     opp_after = _build_opp_after_cache(board, stone, cand2)
     opp_three_threat_points, opp_four_threat_points = _opp_threat_points(opp_after)
-    opp_three_to_threat_points = _opp_next_three_to_threat_points(board, stone, opp_after)
+    opp_three_to_threat_points = _opp_next_three_to_threat_points(stone, opp_after)
 
     # defend only if we have no real attack and opponent has pressure
     must_defend = (
