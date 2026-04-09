@@ -231,6 +231,7 @@ def _is_four_threat_after_move(board, move, stone):
     feats = extract_features(b, stone)
     return (
         feats.get("my_live_four", 0.0) > 0.0
+        or feats.get("my_double_blocked_four", 0.0) > 0.0
         or feats.get("my_blocked4_and_jump4", 0.0) > 0.0
         or feats.get("my_double_jump_four", 0.0) > 0.0
         or feats.get("my_blocked4_and_live3", 0.0) > 0.0
