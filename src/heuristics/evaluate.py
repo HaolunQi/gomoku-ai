@@ -193,7 +193,7 @@ def _attack_subscore_from_deltas(d):
         + 4.0 * max(0.0, d["my_blocked_four"])
         + 3.0 * max(0.0, d["my_live_three"])
         + 2.0 * max(0.0, d["my_jump_three"])
-        + 1.2 * max(0.0, d["my_blocked_three"])
+        + 1.0 * max(0.0, d["my_blocked_three"])
     )
 
 
@@ -211,6 +211,7 @@ def _build_opp_after_cache(board, stone, cand2):
     return cache
 
 def _opp_threat_points(opp_after):
+    # collect opponent moves that create three-level and four-level threats
     three_pts = set()
     four_pts = set()
 
@@ -272,6 +273,7 @@ def _score_sort_key(item):
     move = item["move"]
     return (
         -item["tier"],
+        -int(item["tier"] == 0 and item["covers_three_threat_point"]),
         -int(item["tier"] == 0 and item["blocks_three_to_threat"]),
         -item["subscore"],
         -item["delta"],
@@ -285,8 +287,6 @@ def _defense_sort_key(item):
     # defense ordering: critical cover first, then threat reduction
     move = item["move"]
     return (
-        -int(item["covers_four_threat_point"]),
-        -int(item["covers_three_threat_point"]),
         -item["threat_drop"],
         -item["tier"],
         -item["subscore"],
@@ -299,8 +299,8 @@ def _defense_sort_key(item):
 
 def order_moves(board, moves, stone, weights=None):
     # ordering: # win > block > (defense if required) > attack
-    # attack: tier -> subscore -> eval delta -> center
-    # defense: critical cover -> threat drop -> attack value
+    # attack: tier -> cover/block three threats -> subscore -> eval delta -> center
+    # defense: cover four threats -> threat drop -> attack value
     # defense mode triggers when no attack and opponent has threats
     if not moves:
         return []
@@ -326,7 +326,7 @@ def order_moves(board, moves, stone, weights=None):
     # defend only if we have no real attack and opponent has pressure
     must_defend = (
         my_level < 1 
-        and (opp_level >= 1 or bool(opp_four_threat_points) or bool(opp_three_threat_points))
+        and (opp_level >= 1 or bool(opp_four_threat_points))
     )
 
     winning_moves = []
