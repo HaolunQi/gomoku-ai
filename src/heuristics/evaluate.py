@@ -197,76 +197,70 @@ def _attack_subscore_from_deltas(d):
     )
 
 
-def _is_three_threat_after_move(board, move, stone):
-    # check if move creates forcing threat
-    b = _simulate_move(board, move, stone)
-    if b is None:
-        return False
-
-    feats = extract_features(b, stone)
-    return (
-        feats.get("my_double_live_three", 0.0) > 0.0
-        or feats.get("my_jump3_and_live3", 0.0) > 0.0
-        or feats.get("my_double_jump_three", 0.0) > 0.0
-    )
-
-def _opp_three_threat_points(board, stone):
-    # opponent moves that create an immediate forcing threat
+def _build_opp_after_cache(board, stone, cand2):
+    # cache opponent one-move simulations (board state + extracted features) for reuse
     opp = _other(stone)
-    pts = set()
+    cache = {}
 
-    for m in board.candidate_moves(radius=2):
-        if _is_three_threat_after_move(board, m, opp):
-            pts.add(m)
-
-    return pts
-
-
-def _is_four_threat_after_move(board, move, stone):
-    # check if move creates forcing threat
-    b = _simulate_move(board, move, stone)
-    if b is None:
-        return False
-
-    feats = extract_features(b, stone)
-    return (
-        feats.get("my_live_four", 0.0) > 0.0
-        or feats.get("my_double_blocked_four", 0.0) > 0.0
-        or feats.get("my_blocked4_and_jump4", 0.0) > 0.0
-        or feats.get("my_double_jump_four", 0.0) > 0.0
-        or feats.get("my_blocked4_and_live3", 0.0) > 0.0
-    )
-
-
-def _opp_four_threat_points(board, stone):
-    # opponent moves that create an immediate forcing threat
-    opp = _other(stone)
-    pts = set()
-
-    for m in board.candidate_moves(radius=2):
-        if _is_four_threat_after_move(board, m, opp):
-            pts.add(m)
-
-    return pts
-
-
-def _opp_next_three_to_threat_points(board, stone):
-    # opponent moves that can turn a three into a forcing threat next
-    opp = _other(stone)
-    pts = set()
-
-    for m1 in board.candidate_moves(radius=2):
-        b1 = board.copy()
-        if not b1.place(m1, opp):
+    for m in cand2:
+        b = board.copy()
+        if not b.place(m, opp):
             continue
+        cache[m] = (b, extract_features(b, opp))
 
-        feats1 = extract_features(b1, opp)
-        if (feats1.get("my_live_three", 0.0) <= 0.0
-            and feats1.get("my_jump_three", 0.0) <= 0.0):
+    return cache
+
+def _opp_threat_points(opp_after):
+    three_pts = set()
+    four_pts = set()
+
+    for m, (_, feats) in opp_after.items():
+        if (
+            feats.get("my_live_four", 0.0) > 0.0
+            or feats.get("my_double_blocked_four", 0.0) > 0.0
+            or feats.get("my_blocked4_and_jump4", 0.0) > 0.0
+            or feats.get("my_double_jump_four", 0.0) > 0.0
+            or feats.get("my_blocked4_and_live3", 0.0) > 0.0
+        ):
+            four_pts.add(m)
+
+        if (
+            feats.get("my_double_live_three", 0.0) > 0.0
+            or feats.get("my_jump3_and_live3", 0.0) > 0.0
+            or feats.get("my_double_jump_three", 0.0) > 0.0
+        ):
+            three_pts.add(m)
+
+    return three_pts, four_pts
+
+
+def _opp_next_three_to_threat_points(stone, opp_after):
+    # classify opponent one-step simulations into three-threat and four-threat points
+    opp = _other(stone)
+    pts = set()
+
+    for m1, (b1, feats1) in opp_after.items():
+        if (
+            feats1.get("my_live_three", 0.0) <= 0.0
+            and feats1.get("my_jump_three", 0.0) <= 0.0
+        ):
             continue
 
         for m2 in b1.candidate_moves(radius=2):
-            if _is_four_threat_after_move(b1, m2, opp):
+            b2 = b1.copy()
+            if not b2.place(m2, opp):
+                continue
+
+            feats2 = extract_features(b2, opp)
+            if (
+                feats2.get("my_live_four", 0.0) > 0.0
+                or feats2.get("my_blocked4_and_jump4", 0.0) > 0.0
+                or feats2.get("my_double_jump_four", 0.0) > 0.0
+                or feats2.get("my_blocked4_and_live3", 0.0) > 0.0
+                or feats2.get("my_double_live_three", 0.0) > 0.0
+                or feats2.get("my_jump3_and_live3", 0.0) > 0.0
+                or feats2.get("my_double_jump_three", 0.0) > 0.0
+            ):
                 pts.add(m1)
                 break
 
@@ -323,9 +317,11 @@ def order_moves(board, moves, stone, weights=None):
 
     opp_level = _level_from_feats(before_feats, "opp")
     my_level = _level_from_feats(before_feats, "my")
-    opp_three_threat_points = _opp_three_threat_points(board, stone)
-    opp_four_threat_points = _opp_four_threat_points(board, stone)
-    opp_three_to_threat_points = _opp_next_three_to_threat_points(board, stone)
+
+    cand2 = list(board.candidate_moves(radius=2))
+    opp_after = _build_opp_after_cache(board, stone, cand2)
+    opp_three_threat_points, opp_four_threat_points = _opp_threat_points(opp_after)
+    opp_three_to_threat_points = _opp_next_three_to_threat_points(board, stone, opp_after)
 
     # defend only if we have no real attack and opponent has pressure
     must_defend = (
