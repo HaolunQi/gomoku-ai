@@ -326,7 +326,7 @@ def order_moves(board, moves, stone, weights=None):
     # defend only if we have no real attack and opponent has pressure
     must_defend = (
         my_level < 1 
-        and (opp_level >= 1 or bool(opp_four_threat_points) or bool(opp_three_threat_points) or bool(opp_three_to_threat_points))
+        and (opp_level >= 1 or bool(opp_four_threat_points) or bool(opp_three_threat_points))
     )
 
     winning_moves = []
