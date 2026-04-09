@@ -14,9 +14,69 @@ except Exception:
 
 INF = float("inf")
 
+# Transposition table flags:
+# after a search we store the result. But alpha beta doesn't always find the
+# exact value. sometimes it just proves "at least X" or "at most X".
+# These flags record which case we're in so we can use the stored value safely.
+# the stored value is the true minimax value for this node
+TT_EXACT = 0   
+# we got a beta cutoff, so the true value is >= stored value
+TT_LOWER = 1   
+# no move improved alpha, so the true value is <= stored value
+TT_UPPER = 2   
+
+# how many killer moves to remember per depth level
+MAX_KILLERS = 2
+
 
 def _opponent(stone):
     return WHITE if stone == BLACK else BLACK
+
+
+# Light move ordering:
+# used at shallow depths (near leaves) instead of the full order_moves().
+# order_moves() simulates opponent responses and builds feature caches which
+# is expensive. at depth 1 we are about to call evaluate() anyway, so cheap
+# ordering is good enough and saves a lot of time overall.
+def _light_order_moves(board, moves, stone):
+    """
+    Cheap move ordering for leaf and near-leaf nodes.
+
+    Priority:
+      1. Immediate wins: always play these first
+      2. Immediate blocks: stop the opponent winning
+      3. Everything else sorted by manhattan distance to center
+         (center squares tend to be more valuable in Gomoku)
+    """
+    opp = _opponent(stone)
+    center = board.size // 2
+
+    wins   = []
+    blocks = []
+    # list of (distance, move) for sorting
+    rest   = []  
+
+    for move in moves:
+        # check if this move wins immediately
+        b = board.copy()
+        b.place(move, stone)
+        if rules.winner(b.grid) == stone:
+            wins.append(move)
+            continue
+
+        # check if skipping this move lets the opponent win immediately
+        b2 = board.copy()
+        b2.place(move, opp)
+        if rules.winner(b2.grid) == opp:
+            blocks.append(move)
+            continue
+
+        r, c = move
+        dist = abs(r - center) + abs(c - center)
+        rest.append((dist, move))
+    # closest to center first
+    rest.sort()  
+    return wins + blocks + [m for _, m in rest]
 
 
 class AlphaBetaAgent(Agent):
@@ -37,9 +97,14 @@ class AlphaBetaAgent(Agent):
 
     Budget controls
     ---------------
-    max_depth      : hard depth limit for iterative deepening
-    node_budget    : max nodes expanded per select_move call
-    time_budget_ms : max wall-clock ms per select_move call
+    max_depth        : hard depth limit for iterative deepening
+    node_budget      : max nodes expanded per select_move call
+    time_budget_ms   : max wall-clock ms per select_move call
+
+    New optimizations (added)
+    -------------------------
+    light_order_depth : use cheap ordering at this depth or below (default 1)
+    tt_max_size       : cap TT entries to avoid memory blowup (default 200_000)
     """
 
     name = "alphabeta"
@@ -50,17 +115,41 @@ class AlphaBetaAgent(Agent):
         node_budget: int = 5_000,
         time_budget_ms: int = 200,
         weights=None,
+        # ADDED: at this depth and below, use _light_order_moves instead of
+        # the full order_moves() to avoid spending more time ordering than searching
+        light_order_depth: int = 1,
+        # ADDED: max TT entries. without a cap the table can eat a lot of RAM
+        # in long games or high depth searches
+        tt_max_size: int = 200_000,
     ):
         self.max_depth = max_depth
         self.node_budget = node_budget
         self.time_budget_ms = time_budget_ms
         self.weights = weights
+        #ADDED: new parameters for optimizations
+        self.light_order_depth = light_order_depth 
+        #ADDED: store the TT size limit as an instance variable so we can check it during the search
+        self.tt_max_size = tt_max_size     
 
         self._nodes: int = 0
         self._t0: float = 0.0
 
-    # Public interface                                                     
-  
+        # ADDED: Transposition Table
+        # key   : (board.grid, current_turn), board.grid is already a tuple[tuple] 
+        # so it's immutable and hashable, good for dict keys.
+        # value : (depth, value, flag)
+        #   depth is how many plies were searched below this node
+        #   value is the result of that search
+        #   flag  is TT_EXACT / TT_LOWER / TT_UPPER (see top of file)
+        self._tt: dict = {}
+
+        # ADDED: Killer Move Table
+        # key   : depth (int, distance from root)
+        # value : list of up to MAX_KILLERS moves that caused beta cutoffs here
+        # killers are reset each select_move call because a new search starts.
+        self._killers: dict = {}
+
+    # Public interface:
 
     def select_move(self, board, stone):
         """
@@ -77,6 +166,12 @@ class AlphaBetaAgent(Agent):
         self._nodes = 0
         self._t0 = time.time()
 
+        # ADDED: clear TT and killers at the start of each move decision.
+        # the TT from a previous turn is mostly stale (the board has changed),
+        # and killers from a different position won't be relevant.
+        self._tt.clear()
+        self._killers.clear()
+
         # first move from ordered list in case budget expires immediately
         best_move = order_moves(board, moves, stone, self.weights)[0]
 
@@ -89,7 +184,7 @@ class AlphaBetaAgent(Agent):
 
         return best_move
 
-    # Budget helpers                                                       
+    # budget helpers:
 
     def _time_exceeded(self) -> bool:
         """Check if wall clock time limit has been reached."""
@@ -103,7 +198,32 @@ class AlphaBetaAgent(Agent):
         """Return True if both time and node budgets are still available."""
         return not self._time_exceeded() and not self._node_exceeded()
 
-    # Search                                                               
+    # killer move helpers:
+
+    # ADDED
+    def _record_killer(self, depth: int, move) -> None:
+        """
+        Store a move that caused a beta cutoff at this depth.
+
+        keep a short list (MAX_KILLERS) per depth. If the move is already
+        in the list we don't add a duplicate. When the list is full we drop
+        the oldest entry to make room for the new one (FIFO rotation).
+        """
+        killers = self._killers.setdefault(depth, [])
+        if move in killers:
+            # already tracked, nothing to do
+            return  
+        if len(killers) >= MAX_KILLERS:
+            # drop oldest killer to stay within the limit
+            killers.pop(0)  
+        killers.append(move)
+
+    # ADDED
+    def _get_killers(self, depth: int) -> list:
+        """Return the stored killer moves for this depth (may be empty)."""
+        return self._killers.get(depth, [])
+
+    # Search:
 
     def _search_root(self, board, stone, depth: int):
         """
@@ -130,6 +250,8 @@ class AlphaBetaAgent(Agent):
                 depth=depth - 1,
                 alpha=alpha,
                 beta=beta,
+                # ADDED: root is at ply 0, children are at ply 1
+                ply=1,
             )
 
             if val > best_val:
@@ -150,6 +272,8 @@ class AlphaBetaAgent(Agent):
         depth: int,
         alpha: float,
         beta: float,
+        # ADDED: distance from root, used to index the killer table
+        ply: int = 0,   
     ) -> float:
         """
         Recursive minimax alpha-beta value function.
@@ -167,17 +291,88 @@ class AlphaBetaAgent(Agent):
         """
         self._nodes += 1
 
-        # Base cases: terminal state, depth limit, or budget exhausted
+        # ADDED: Transposition table lookup
+        # before doing any work, check if we have already searched this exact
+        # position at equal or greater depth. If so, we can reuse the result.
+        tt_key = (board.grid, current_turn)
+        tt_hit = self._tt.get(tt_key)
+
+        if tt_hit is not None:
+            tt_depth, tt_val, tt_flag = tt_hit
+
+            # only use the cached result if it was searched at least as deeply
+            # as we need right now. A shallower cached result might miss threats
+            # that only show up at greater depth.
+            if tt_depth >= depth:
+                if tt_flag == TT_EXACT:
+                    # we know the true value, return it directly
+                    return tt_val
+                elif tt_flag == TT_LOWER:
+                    # this is a lower bound. tighten alpha
+                    alpha = max(alpha, tt_val)
+                elif tt_flag == TT_UPPER:
+                    # this is an upper bound. tighten beta
+                    beta = min(beta, tt_val)
+
+                # after adjusting alpha/beta, check if we can prune already
+                if alpha >= beta:
+                    return tt_val
+
+        # base cases: terminal state, depth limit, or budget exhausted
         if rules.is_terminal(board.grid) or depth == 0 or not self._budget_ok():
-            # Always evaluate from root_stone's perspective for consistency
+            # always evaluate from root_stone's perspective for consistency
             return evaluate(board, root_stone, self.weights)
 
-        moves = order_moves(board, board.legal_moves(), current_turn, self.weights)
+        # ADDED: choose move ordering strategy based on depth 
+        # at leaves and near leaves the full order_moves() costs more than it
+        # saves because there are few nodes below to prune. Use the cheap
+        # version instead.
+        raw_moves = board.legal_moves()
+
+        if depth <= self.light_order_depth:
+            ordered = _light_order_moves(board, raw_moves, current_turn)
+        else:
+            ordered = order_moves(board, raw_moves, current_turn, self.weights)
+
+        # ADDED: inject killer moves near the front of the list 
+        # killers are moves that caused beta cutoffs at this ply before.
+        # they are not guaranteed to be good here, but they often are, so
+        # trying them early can trigger more pruning without extra board copies.
+        killers = self._get_killers(ply)
+        if killers:
+            killer_set = set(killers)
+            # find where the win/block priority prefix ends.
+            # order_moves puts wins and blocks at the front — killers go after those,
+            # not before them.
+            split = 0
+            for m in ordered:
+                b = board.copy()
+                b.place(m, current_turn)
+                if rules.winner(b.grid) == current_turn:
+                    split += 1
+                else:
+                    b2 = board.copy()
+                    b2.place(m, _opponent(current_turn))
+                    if rules.winner(b2.grid) == _opponent(current_turn):
+                        split += 1
+                    else:
+                        break
+
+            prefix = ordered[:split]
+            remainder = ordered[split:]
+            killer_front = [m for m in remainder if m in killer_set]
+            killer_rest  = [m for m in remainder if m not in killer_set]
+            ordered = prefix + killer_front + killer_rest
+
+        # ADDED: save original alpha and beta before the loop so TT flags are correct.
+        # beta can be modified inside the minimizing loop, so we need the original.
+        alpha_orig = alpha
+        beta_orig = beta
 
         if current_turn == root_stone:
             # Maximizing player 
             value = -INF
-            for move in moves:
+            for move in ordered:
                 child = board.copy()
                 child.place(move, current_turn)
                 val = self._search_value(
@@ -187,18 +382,19 @@ class AlphaBetaAgent(Agent):
                     depth=depth - 1,
                     alpha=alpha,
                     beta=beta,
+                    ply=ply + 1,  # ADDED
                 )
                 value = max(value, val)
                 alpha = max(alpha, value)
                 if alpha >= beta:
-                    # Beta cutoff. opponent won't allow this branch to be reached
-                    break  
-            return value
-
+                    # beta cutoff. opponent won't allow this branch to be reached.
+                    # ADDED: record this move as a killer for this ply
+                    self._record_killer(ply, move)
+                    break
         else:
             # Minimizing player (opponent)
             value = INF
-            for move in moves:
+            for move in ordered:
                 child = board.copy()
                 child.place(move, current_turn)
                 val = self._search_value(
@@ -208,10 +404,35 @@ class AlphaBetaAgent(Agent):
                     depth=depth - 1,
                     alpha=alpha,
                     beta=beta,
+                    # ADDED
+                    ply=ply + 1,  
                 )
                 value = min(value, val)
                 beta = min(beta, value)
                 if alpha >= beta:
-                    # Alpha cutoff.we already have a better option
-                    break  
-            return value
+                    # alpha cutoff. we already have a better option.
+                    # ADDED: record this move as a killer for this ply
+                    self._record_killer(ply, move)
+                    break
+
+        #ADDED:store result in transposition table
+        # only store if the TT is not full, to prevent memory blowup.
+        if len(self._tt) < self.tt_max_size:
+            # determine the correct flag based on how alpha/beta moved
+            if value <= alpha_orig:
+                # no move improved alpha. this is an upper bound
+                flag = TT_UPPER
+            elif value >= beta:
+                # we got a cutoff. this is a lower bound
+                flag = TT_LOWER
+            else:
+                # alpha < value < beta. this is exact
+                flag = TT_EXACT
+
+            # only overwrite a TT entry if our new search is at least as deep
+            existing = self._tt.get(tt_key)
+            if existing is None or depth >= existing[0]:
+                self._tt[tt_key] = (depth, value, flag)
+
+
+        return value
