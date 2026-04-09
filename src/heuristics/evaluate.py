@@ -304,7 +304,7 @@ def order_moves(board, moves, stone, weights=None):
 
     # defend only if we have no real attack and opponent has pressure
     must_defend = (
-        my_level < 1 and (opp_level >= 1 or bool(opp_threat_points))
+        my_level < 1 and (opp_level >= 1 or bool(opp_threat_points) or bool(opp_three_to_threat_points))
     )
 
     winning_moves = []
@@ -353,11 +353,11 @@ def order_moves(board, moves, stone, weights=None):
     forced_defense_moves = []
 
     for item in scored_moves:
-        after_opp_level = _level_from_feats(item["after_feats"], "opp")
+        after_opp_level = _level_from_feats(extract_features(item["next_board"], opp), "my")
         threat_drop = before_opp_level - after_opp_level
 
         # keep only moves that actually reduce opponent threat level
-        if threat_drop > 0:
+        if item["covers_critical_point"] or threat_drop > 0:
             forced_defense_moves.append(
                 {
                     "move": item["move"],
