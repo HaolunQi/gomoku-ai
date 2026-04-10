@@ -273,8 +273,6 @@ def _score_sort_key(item):
     move = item["move"]
     return (
         -item["tier"],
-        -int(item["tier"] == 0 and item["covers_three_threat_point"]),
-        -int(item["tier"] == 0 and item["blocks_three_to_threat"]),
         -item["subscore"],
         -item["delta"],
         item["dist"],
