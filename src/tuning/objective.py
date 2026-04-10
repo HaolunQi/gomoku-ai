@@ -4,7 +4,10 @@ from agents.ab_agent import AlphaBetaAgent
 from gomoku.board import BLACK, WHITE
 from gomoku.game import Game
 
-
+# tuning/objective.py
+# Scores a candidate weight vector by playing real games and measuring win rate.
+# Used by LocalSearchTuner to evaluate each candidate during hill climbing.
+# used claude to fix bugs
 def objective(weights, board_factory, opponents, games=4, time_penalty_weight=0.001):
     """Play the AB agent (with candidate weights) against opponents and return
     win_rate minus a small time penalty. Higher is better."""

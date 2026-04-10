@@ -7,7 +7,8 @@ from gomoku.board import Board
 from tuning.local_search_tuner import LocalSearchTuner
 from tuning.objective import objective
 
-
+# tests/test_tuner_smoke.py
+# Smoke tests for the local search tuning pipeline.
 def test_objective_returns_float_with_real_opponent():
     # run a couple of real games on a tiny board and check the score is a valid float
     score = objective(

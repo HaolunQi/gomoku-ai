@@ -1,6 +1,9 @@
 import argparse
 import sys
 from pathlib import Path
+# tests/test_tuner_smoke.py
+# Smoke tests for the local search tuning pipeline.
+# claude was used for the arguments
 
 # Ensure src/ is importable
 REPO_ROOT = Path(__file__).resolve().parents[1]
