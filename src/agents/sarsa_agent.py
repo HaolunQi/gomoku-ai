@@ -1,3 +1,4 @@
+# Claude Opus 4.6 was used to implement and generate parts of this code.
 from agents.rl_agent import RLAgent
 from heuristics.features import featurize_after_move
 
@@ -18,7 +19,7 @@ class SARSAAgent(RLAgent):
         for k, v in feats.items():
             current_q += float(self.weights.get(k, 0.0)) * float(v)
 
-        # TD target: the key difference from Q-learning
+        # TD(Temporal Difference ) target: the key difference from Q-learning
         if done:
             # terminal state — no future reward
             target = reward

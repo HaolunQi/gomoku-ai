@@ -1,3 +1,4 @@
+// Claude Opus 4.6 was used to implement and generate parts of this code.
 const BOARD_SIZE = 15;
 const EMPTY = " ";
 const BLACK = "X";

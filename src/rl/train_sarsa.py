@@ -1,3 +1,4 @@
+# Claude Opus 4.6 was used to implement and generate parts of this code.
 import argparse
 import csv
 import random
@@ -25,7 +26,6 @@ def train_sarsa(
     opponent_type="random",
     init_weights_path=None,
 ):
-    # load pre-existing weights if provided
     if init_weights_path:
         print(f"Loading weights from {init_weights_path}")
         init_weights = load_weights(init_weights_path)
@@ -49,7 +49,7 @@ def train_sarsa(
     stats = {"wins": 0, "losses": 0, "draws": 0}
     rng = random.Random(seed)
 
-    # optional CSV logging for training curves
+    # CSV logging feature for training curves
     csv_file = None
     csv_writer = None
     if csv_log:

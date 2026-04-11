@@ -1,3 +1,4 @@
+# Claude Opus 4.6 was used to implement and generate parts of this code.
 import json
 import csv
 import itertools

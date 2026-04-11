@@ -1,3 +1,4 @@
+# Claude Opus 4.6 was used to implement and generate parts of this code.
 # tests/test_sarsa_smoke.py
 import os
 import tempfile
