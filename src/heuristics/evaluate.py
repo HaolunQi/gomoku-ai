@@ -30,7 +30,10 @@ BASE_PATTERN_WEIGHTS = {
     "double_blocked_four": 1000.0,
     "blocked4_and_jump4": 1000.0,
     "blocked4_and_live3": 1000.0,
-    "blocked4_and_jump3": 1000.0
+    "blocked4_and_jump3": 1000.0,
+    "double_jump_four": 1000.0,
+    "jump4_and_live3": 1000.0,
+    "jump4_and_jump3": 1000.0,
 }
 
 # terminal scores
@@ -131,6 +134,10 @@ def _level_from_feats(feats, prefix):
         return 2
     if feats.get(f"{prefix}_jump_three", 0.0) > 0.0:
         return 2
+    if feats.get(f"{prefix}_live_two", 0.0) > 0.0:
+        return 1
+    if feats.get(f"{prefix}_jump_two", 0.0) > 0.0:
+        return 1
     return 0
 
 
@@ -142,12 +149,18 @@ _ATTACK_DELTA_KEYS = [
     "my_live_three",
     "my_jump_three",
     "my_blocked_three",
+    "my_live_two",
+    "my_jump_two",
     "my_double_live_three",
     "my_jump3_and_live3",
     "my_double_jump_three",
     "my_blocked4_and_live3",
     "my_blocked4_and_jump4",
+    "my_blocked4_and_jump3",
+    "my_double_blocked_four",
     "my_double_jump_four",
+    "my_jump4_and_live3",
+    "my_jump4_and_jump3",
 ]
 
 
@@ -162,26 +175,32 @@ def _feature_deltas(before_feats, after_feats):
 def _attack_tier_from_deltas(d):
     # coarse attack priority
     if d["my_live_four"] > 0.0:
-        return 5
+            return 8
     if (
-        d["my_blocked4_and_jump4"] > 0.0
+        d["my_double_blocked_four"] > 0.0
+        or d["my_blocked4_and_jump4"] > 0.0
         or d["my_double_jump_four"] > 0.0
         or d["my_blocked4_and_live3"] > 0.0
+        or d["my_blocked4_and_jump3"] > 0.0
+        or d["my_jump4_and_live3"] > 0.0
+        or d["my_jump4_and_jump3"] > 0.0
     ):
-        return 4
+        return 7
+    if d["my_jump_four"] > 0.0:
+        return 6
     if (
         d["my_double_live_three"] > 0.0
         or d["my_jump3_and_live3"] > 0.0
         or d["my_double_jump_three"] > 0.0
     ):
+        return 5
+    if d["my_blocked_four"] > 0.0:
+        return 4
+    if d["my_live_three"] > 0.0:
         return 3
-    if d["my_jump_four"] > 0.0:
+    if d["my_jump_three"] > 0.0:
         return 2
-    if (
-        d["my_blocked_four"] > 0.0
-        or d["my_live_three"] > 0.0
-        or d["my_jump_three"] > 0.0
-    ):
+    if d["my_live_two"] > 0.0 or d["my_jump_two"] > 0.0:
         return 1
     return 0
 
@@ -189,17 +208,22 @@ def _attack_tier_from_deltas(d):
 def _attack_subscore_from_deltas(d):
     # fine-grained attack score
     return (
-        11.0 * max(0.0, d["my_blocked4_and_jump4"])
-        + 10.0 * max(0.0, d["my_double_jump_four"])
-        + 9.0 * max(0.0, d["my_blocked4_and_live3"])
+        12.0 * max(0.0, d["my_blocked4_and_jump4"])
+        + 11.0 * max(0.0, d["my_double_jump_four"])
+        + 10.0 * max(0.0, d["my_blocked4_and_live3"])
+        + 10.0 * max(0.0, d["my_blocked4_and_jump3"])
+        + 10.0 * max(0.0, d["my_jump4_and_live3"])
+        + 10.0 * max(0.0, d["my_jump4_and_jump3"])
+        + 11.0 * max(0.0, d["my_double_blocked_four"])
+        + 9.0 * max(0.0, d["my_jump_four"])
         + 8.0 * max(0.0, d["my_double_live_three"])
-        + 7.0 * max(0.0, d["my_jump3_and_live3"])
-        + 6.0 * max(0.0, d["my_double_jump_three"])
-        + 5.0 * max(0.0, d["my_jump_four"])
-        + 4.0 * max(0.0, d["my_blocked_four"])
-        + 3.0 * max(0.0, d["my_live_three"])
-        + 2.0 * max(0.0, d["my_jump_three"])
-        + 1.0 * max(0.0, d["my_blocked_three"])
+        + 7.5 * max(0.0, d["my_jump3_and_live3"])
+        + 7.0 * max(0.0, d["my_double_jump_three"])
+        + 6.0 * max(0.0, d["my_blocked_four"])
+        + 4.0 * max(0.0, d["my_live_three"])
+        + 2.5 * max(0.0, d["my_jump_three"])
+        + 0.5 * max(0.0, d["my_live_two"])
+        + 0.3 * max(0.0, d["my_jump_two"])
     )
 
 
@@ -229,6 +253,8 @@ def _opp_threat_points(opp_after):
             or feats.get("my_double_jump_four", 0.0) > 0.0
             or feats.get("my_blocked4_and_live3", 0.0) > 0.0
             or feats.get("my_blocked4_and_jump3", 0.0) > 0.0
+            or feats.get("my_jump4_and_live3", 0.0) > 0.0
+            or feats.get("my_jump4_and_jump3", 0.0) > 0.0
         ):
             four_pts.add(m)
 
@@ -262,9 +288,13 @@ def _opp_next_three_to_threat_points(stone, opp_after):
             feats2 = extract_features(b2, opp)
             if (
                 feats2.get("my_live_four", 0.0) > 0.0
+                or feats2.get("my_double_blocked_four", 0.0) > 0.0
                 or feats2.get("my_blocked4_and_jump4", 0.0) > 0.0
                 or feats2.get("my_double_jump_four", 0.0) > 0.0
                 or feats2.get("my_blocked4_and_live3", 0.0) > 0.0
+                or feats2.get("my_blocked4_and_jump3", 0.0) > 0.0
+                or feats2.get("my_jump4_and_live3", 0.0) > 0.0
+                or feats2.get("my_jump4_and_jump3", 0.0) > 0.0
                 or feats2.get("my_double_live_three", 0.0) > 0.0
                 or feats2.get("my_jump3_and_live3", 0.0) > 0.0
                 or feats2.get("my_double_jump_three", 0.0) > 0.0
@@ -280,8 +310,8 @@ def _score_sort_key(item):
     move = item["move"]
     return (
         -item["tier"],
-        -int(item["tier"] <= 1 and item["covers_three_threat_point"]),
-        -int(item["tier"] <= 1 and item["blocks_three_to_threat"]),
+        -int(item["covers_three_threat_point"]),
+        -int(item["blocks_three_to_threat"]),
         -item["subscore"],
         -item["delta"],
         item["dist"],

@@ -49,6 +49,8 @@ def _count_line_patterns(line, stone):
     blocked_three = 0
     live_four = 0
     blocked_four = 0
+    jump_two = 0
+    blocked_jump_two = 0
     jump_three = 0
     blocked_jump_three = 0
     jump_four = 0
@@ -89,6 +91,27 @@ def _count_line_patterns(line, stone):
                 blocked_four += 1
 
         i = j
+    
+    # open jump two patterns
+    open_jump_two_patterns = [
+        [EMPTY, stone, EMPTY, stone, EMPTY],
+    ]
+
+    # blocked jump two patterns
+    blocked_jump_two_patterns = [
+        [stone, EMPTY, stone, EMPTY],
+        [EMPTY, stone, EMPTY, stone],
+    ]
+
+    # open jump two
+    for i in range(n - 4):
+        if line[i:i + 5] in open_jump_two_patterns:
+            jump_two += 1
+
+    # blocked jump two
+    for i in range(n - 3):
+        if line[i:i + 4] in blocked_jump_two_patterns:
+            blocked_jump_two += 1
 
     # open jump three patterns
     open_jump_three_patterns = [
@@ -144,6 +167,8 @@ def _count_line_patterns(line, stone):
         "blocked_three": blocked_three,
         "live_four": live_four,
         "blocked_four": blocked_four,
+        "jump_two": jump_two,
+        "blocked_jump_two": blocked_jump_two,
         "jump_three": jump_three,
         "blocked_jump_three": blocked_jump_three,
         "jump_four": jump_four,
@@ -160,6 +185,8 @@ def _collect_patterns(grid, stone):
         "blocked_three": 0,
         "live_four": 0,
         "blocked_four": 0,
+        "jump_two": 0,
+        "blocked_jump_two": 0,
         "jump_three": 0,
         "blocked_jump_three": 0,
         "jump_four": 0,
@@ -222,6 +249,12 @@ def extract_features(board, stone):
     my_double_jump_four = 1.0 if my_patterns["jump_four"] >= 2 else 0.0
     opp_double_jump_four = 1.0 if opp_patterns["jump_four"] >= 2 else 0.0
 
+    my_jump4_and_live3 = 1.0 if my_patterns["jump_four"] >= 1 and my_patterns["live_three"] >= 1 else 0.0
+    opp_jump4_and_live3 = 1.0 if opp_patterns["jump_four"] >= 1 and opp_patterns["live_three"] >= 1 else 0.0
+
+    my_jump4_and_jump3 = 1.0 if my_patterns["jump_four"] >= 1 and my_patterns["jump_three"] >= 1 else 0.0
+    opp_jump4_and_jump3 = 1.0 if opp_patterns["jump_four"] >= 1 and opp_patterns["jump_three"] >= 1 else 0.0
+
     feats = {
         # counts
         "my_stones": float(my_count),
@@ -235,6 +268,8 @@ def extract_features(board, stone):
         "my_blocked_three": float(my_patterns["blocked_three"]),
         "my_live_four": float(my_patterns["live_four"]),
         "my_blocked_four": float(my_patterns["blocked_four"]),
+        "my_jump_two": float(my_patterns["jump_two"]),
+        "my_blocked_jump_two": float(my_patterns["blocked_jump_two"]),
         "my_jump_three": float(my_patterns["jump_three"]),
         "my_blocked_jump_three": float(my_patterns["blocked_jump_three"]),
         "my_jump_four": float(my_patterns["jump_four"]),
@@ -247,6 +282,8 @@ def extract_features(board, stone):
         "opp_blocked_three": float(opp_patterns["blocked_three"]),
         "opp_live_four": float(opp_patterns["live_four"]),
         "opp_blocked_four": float(opp_patterns["blocked_four"]),
+        "opp_jump_two": float(opp_patterns["jump_two"]),
+        "opp_blocked_jump_two": float(opp_patterns["blocked_jump_two"]),
         "opp_jump_three": float(opp_patterns["jump_three"]),
         "opp_blocked_jump_three": float(opp_patterns["blocked_jump_three"]),
         "opp_jump_four": float(opp_patterns["jump_four"]),
@@ -261,6 +298,8 @@ def extract_features(board, stone):
         "my_blocked4_and_live3": my_blocked4_and_live3,
         "my_blocked4_and_jump3": my_blocked4_and_jump3,
         "my_double_jump_four": my_double_jump_four,
+        "my_jump4_and_live3": my_jump4_and_live3,
+        "my_jump4_and_jump3": my_jump4_and_jump3,
 
         "opp_double_live_three": opp_double_live_three,
         "opp_double_jump_three": opp_double_jump_three,
@@ -270,6 +309,8 @@ def extract_features(board, stone):
         "opp_blocked4_and_live3": opp_blocked4_and_live3,
         "opp_blocked4_and_jump3": opp_blocked4_and_jump3,
         "opp_double_jump_four": opp_double_jump_four,
+        "opp_jump4_and_live3": opp_jump4_and_live3,
+        "opp_jump4_and_jump3": opp_jump4_and_jump3,
     }
 
     return feats
