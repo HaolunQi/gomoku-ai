@@ -109,22 +109,28 @@ def _level_from_feats(feats, prefix):
     # map features to coarse threat level
     if feats.get(f"{prefix}_live_four", 0.0) > 0.0:
         return 6
+    if feats.get(f"{prefix}_double_blocked_four", 0.0) > 0.0:
+        return 5
     if feats.get(f"{prefix}_blocked4_and_live3", 0.0) > 0.0:
         return 5
     if feats.get(f"{prefix}_blocked4_and_jump4", 0.0) > 0.0:
         return 5
     if feats.get(f"{prefix}_double_jump_four", 0.0) > 0.0:
         return 5
+    if feats.get(f"{prefix}_jump_four", 0.0) > 0.0:
+        return 4
+    if feats.get(f"{prefix}_blocked_four", 0.0) > 0.0:
+        return 4
     if feats.get(f"{prefix}_double_live_three", 0.0) > 0.0:
-        return 4
+        return 3
     if feats.get(f"{prefix}_jump3_and_live3", 0.0) > 0.0:
-        return 4
+        return 3
     if feats.get(f"{prefix}_double_jump_three", 0.0) > 0.0:
         return 3
     if feats.get(f"{prefix}_live_three", 0.0) > 0.0:
         return 2
     if feats.get(f"{prefix}_jump_three", 0.0) > 0.0:
-        return 1
+        return 2
     return 0
 
 
@@ -325,8 +331,8 @@ def order_moves(board, moves, stone, weights=None):
 
     # defend only if we have no real attack and opponent has pressure
     must_defend = (
-        my_level < 1 
-        and (opp_level >= 1 or bool(opp_four_threat_points))
+        my_level < 2 
+        and (opp_level >= 2 or bool(opp_four_threat_points))
     )
 
     winning_moves = []
@@ -385,8 +391,6 @@ def order_moves(board, moves, stone, weights=None):
                 {
                     "move": item["move"],
                     "threat_drop": threat_drop,
-                    "covers_four_threat_point": item["covers_four_threat_point"],
-                    "covers_three_threat_point": item["covers_three_threat_point"],
                     "tier": item["tier"],
                     "subscore": item["subscore"],
                     "delta": item["delta"],
