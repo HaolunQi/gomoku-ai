@@ -7,11 +7,23 @@ from gomoku import rules
 from scripts.agent_loader import load_agent
 
 
-def play_match(black_name, white_name, seed=None, print_board=False, max_illegal_retries=3):
+def play_match(
+    black_name,
+    white_name,
+    seed=None,
+    print_board=False,
+    max_illegal_retries=3,
+    black_weights=None,
+    white_weights=None,
+):
     # Run a single match and return winner or None for draw
 
-    black_agent = load_agent(black_name, seed=seed)
-    white_agent = load_agent(white_name, seed=None if seed is None else seed + 1)
+    black_agent = load_agent(black_name, seed=seed, weights_path=black_weights)
+    white_agent = load_agent(
+        white_name,
+        seed=None if seed is None else seed + 1,
+        weights_path=white_weights,
+    )
 
     game = Game(board=Board(), black_agent=black_agent, white_agent=white_agent, to_move=BLACK)
 
@@ -48,12 +60,21 @@ def main():
     parser = argparse.ArgumentParser(description="Run a single Gomoku match (CLI).")
     parser.add_argument("--black", default="random")
     parser.add_argument("--white", default="greedy")
+    parser.add_argument("--black-weights", default=None)
+    parser.add_argument("--white-weights", default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--print-board", action="store_true")
     args = parser.parse_args()
 
     try:
-        w = play_match(args.black, args.white, seed=args.seed, print_board=args.print_board)
+        w = play_match(
+            args.black,
+            args.white,
+            seed=args.seed,
+            print_board=args.print_board,
+            black_weights=args.black_weights,
+            white_weights=args.white_weights,
+        )
     except ValueError as e:
         print(str(e), file=sys.stderr)
         return 2

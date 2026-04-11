@@ -46,18 +46,23 @@ def available_agents():
     return _AGENT_MAP
 
 
-def _construct(cls, seed=None):
-    # Construct agent, passing seed if supported
+def _construct(cls, seed=None, weights_path=None):
+    # Construct agent, passing supported kwargs
     try:
         sig = inspect.signature(cls)
+        kwargs = {}
+
         if "seed" in sig.parameters:
-            return cls(seed=seed)
-        return cls()
+            kwargs["seed"] = seed
+        if "weights_path" in sig.parameters:
+            kwargs["weights_path"] = weights_path
+
+        return cls(**kwargs)
     except (TypeError, ValueError):
         return cls()
 
 
-def load_agent(name_or_spec, seed=None):
+def load_agent(name_or_spec, seed=None, weights_path=None):
     # Load agent by short name or module:Class spec
     s = name_or_spec.strip()
 
@@ -67,11 +72,11 @@ def load_agent(name_or_spec, seed=None):
         cls = getattr(mod, class_name)
         if not inspect.isclass(cls) or not issubclass(cls, Agent):
             raise ValueError(f"{s!r} is not an Agent subclass")
-        return _construct(cls, seed=seed)
+        return _construct(cls, seed=seed, weights_path=weights_path)
 
     key = s.lower()
     amap = available_agents()
     if key not in amap:
         opts = ", ".join(sorted(amap.keys()))
         raise ValueError(f"Unknown agent name: {s!r}. Available: {opts}")
-    return _construct(amap[key], seed=seed)
+    return _construct(amap[key], seed=seed, weights_path=weights_path)

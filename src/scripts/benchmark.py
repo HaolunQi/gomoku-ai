@@ -33,7 +33,16 @@ def _pct(x, total):
     return f"{(100.0 * x / total):.1f}%"
 
 
-def run_benchmark(black, white, games, seed=None, swap_sides=False, csv_path=None):
+def run_benchmark(
+    black,
+    white,
+    games,
+    seed=None,
+    swap_sides=False,
+    csv_path=None,
+    black_weights=None,
+    white_weights=None,
+):
     # Run N matches and collect stats
     stats = Stats()
     rows = []
@@ -41,12 +50,21 @@ def run_benchmark(black, white, games, seed=None, swap_sides=False, csv_path=Non
     for i in range(games):
         if swap_sides and (i % 2 == 1):
             b_name, w_name = white, black
+            b_weights, w_weights = white_weights, black_weights
         else:
             b_name, w_name = black, white
+            b_weights, w_weights = black_weights, white_weights
 
         game_seed = None if seed is None else seed + i * 1000
 
-        winner = play_match(b_name, w_name, seed=game_seed, print_board=False)
+        winner = play_match(
+            b_name,
+            w_name,
+            seed=game_seed,
+            print_board=False,
+            black_weights=b_weights,
+            white_weights=w_weights,
+        )
         stats.record(winner)
 
         if csv_path is not None:
@@ -77,6 +95,8 @@ def main():
 
     parser.add_argument("--black", default=None)
     parser.add_argument("--white", default=None)
+    parser.add_argument("--black-weights", default=None)
+    parser.add_argument("--white-weights", default=None)
     parser.add_argument("--games", type=int, default=100)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--swap-sides", action="store_true")
@@ -100,6 +120,8 @@ def main():
             seed=args.seed,
             swap_sides=args.swap_sides,
             csv_path=csv_path,
+            black_weights=args.black_weights,
+            white_weights=args.white_weights,
         )
     except Exception as e:
         print(f"Benchmark failed: {e}", file=sys.stderr)
