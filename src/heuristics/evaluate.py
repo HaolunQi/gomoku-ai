@@ -228,6 +228,7 @@ def _opp_threat_points(opp_after):
             or feats.get("my_blocked4_and_jump4", 0.0) > 0.0
             or feats.get("my_double_jump_four", 0.0) > 0.0
             or feats.get("my_blocked4_and_live3", 0.0) > 0.0
+            or feats.get("my_blocked4_and_jump3", 0.0) > 0.0
         ):
             four_pts.add(m)
 
@@ -279,8 +280,8 @@ def _score_sort_key(item):
     move = item["move"]
     return (
         -item["tier"],
-        -int(item["covers_three_threat_point"]),
-        -int(item["blocks_three_to_threat"]),
+        -int(item["tier"] <= 1 and item["covers_three_threat_point"]),
+        -int(item["tier"] <= 1 and item["blocks_three_to_threat"]),
         -item["subscore"],
         -item["delta"],
         item["dist"],
